@@ -1,0 +1,34 @@
+# REJECTED, round 3, attempt b: "The M1 break must be a displacement: the move from the low to the break
+# leaves a fair value gap."
+# Dev: recall 8.2% -> 7.2%, precision 2.1% -> 1.9%. Both fell. M1 breaks nearly always leave an FVG, so it
+# removed only 8 bot trades, one of them a match.
+# Shown on top of the kept round-3 code.
+--- a/strategy.py
++++ b/strategy.py
+@@ -47,7 +47,7 @@
+ 
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ from smcml.bias import resample, bar_length  # noqa: E402
+-from smcml.detectors import SwingTracker, StructureTracker, mirror, atr, find_order_block  # noqa: E402
++from smcml.detectors import SwingTracker, StructureTracker, mirror, atr, find_order_block, find_fvgs  # noqa: E402
+ from range_types import Settings as RangeSettings, _pause, _staircase  # noqa: E402
+ from bias import htf_bias  # noqa: E402
+ from poi import pois, targets, _first_at_or_below  # noqa: E402
+@@ -71,6 +71,7 @@
+     MAX_BARS_WAIT_FILL: int = 40            # smc_dickson: a limit order not filled in 40 candles is cancelled
+     STOP_BUFFER_ATR: float = 0.05           # smc_dickson: the stop goes this far beyond the extreme
+     MIN_RISK_ATR: float = 0.25              # smc_dickson: skip setups whose stop is tighter than this
++    BREAK_NEEDS_FVG: bool = True            # the M1 break must leave a fair value gap between the low and the break
+     SNIPER_WINDOW: str = "1D"               # an M1 entry may come up to this long after the touch
+     SNIPER_MAX_SHOTS: int = 3               # tries per POI: after a stop-out, another on a new M1 break up (journal: "max 3 tries")
+     COST: float = 0.0                       # spread + commission per trade, in price units
+@@ -189,6 +190,9 @@
+         self.level = level
+         if t > self.ext_bar and c[t] > level:
+             self.state = "IDLE"
++            if s.BREAK_NEEDS_FVG and not find_fvgs(h, l, self.ext_bar, t):
++                self.why = "break without a fair value gap (no displacement)"
++                return None
+             a = self.a[t]
+             ob_bar, ob_top, ob_bot = find_order_block(o, h, l, c, self.ext_bar)
+             entry = min(ob_top, c[t])

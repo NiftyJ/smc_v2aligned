@@ -1,0 +1,17 @@
+# REJECTED, round 3, attempt e: "Check the trend first: a sweep and break the trend forbids does not use up
+# the POI."
+# Dev: recall 8.2% -> 8.2%, precision 2.13% -> 2.08% (9 more bot trades, none a match).
+# Shown on top of the kept round-3 code.
+--- a/strategy.py
++++ b/strategy.py
+@@ -409,6 +409,10 @@
+                     rec["stage"] = ("no POI armed" + (" (this POI already had its setup)" if rec["poi_before_use"] >= 0
+                                                       else "") if p < 0 else m.why)
+                 continue
++            if trend[t] != d:                            # the trend first: a setup it forbids keeps the POI
++                if rec is not None:
++                    rec["stage"] = "sweep + break, but the trend disagrees (the POI stays armed)"
++                continue
+             t1 = pois_by_dir[d][p][1]
+             seg = owner[d][t + 1:t1]
+             seg[seg == p] = -1                          # one setup per touch

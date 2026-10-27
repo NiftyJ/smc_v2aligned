@@ -13,10 +13,10 @@ TREND_NEED).
    * then on M1: a range forms there; its low is swept (a candle trades below the last M1 swing
      low), then a candle closes above the real M1 swing high: the highest high between the sweep and
      the lowest point after it, or the last swing high if higher (no new low for 30 candles = reset)
-   * the order: a buy limit at the OPEN of the order block of that move, stop just under the low
-     of the range (the sweep's low)
+   * the order: a buy limit at the HIGH (top) of the order block of that move, stop just under
+     the low of the range (the sweep's low)
    * not filled, and price builds the next range (e.g. a pause up)? Each new M1 break up inside
-     it moves the order to the open of the new order block, stop under that range's low
+     it moves the order to the high of the new order block, stop under that range's low
    * cancelled on a close below the stop's range or below the higher low, or 1 day after the touch
    * stopped out? Another try (up to 3 per POI) once an M1 candle closes above the real swing high
      again (the failed try's high, or the highest high before the next low): the same order rules
@@ -303,10 +303,10 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
     owner0 = {d: owner[d].copy() for d in (1, -1)} if trace is not None else None   # before "one setup per touch"
 
     def place(d, t, ob_bar, range_low, order, base_row):
-        """A limit at the OPEN of the order block, stop just beyond the range's low
+        """A limit at the HIGH (top) of the order block, stop just beyond the range's low
         (all in the flipped chart, where every trade is a long)."""
         O, H, L, C = flipped[d]
-        entry, stop = O[ob_bar], range_low - s.STOP_BUFFER_ATR * a[t]
+        entry, stop = H[ob_bar], range_low - s.STOP_BUFFER_ATR * a[t]
         if not (np.isfinite(a[t]) and entry - stop >= s.MIN_RISK_ATR * a[t] and entry < C[t]):
             return base_row if order > 1 else None      # a bad successive order keeps the one before
         return dict(base_row or {}, entry_f=entry, stop_f=stop, placed_bar=t, ob_bar=ob_bar, order=order,
