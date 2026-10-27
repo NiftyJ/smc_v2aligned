@@ -1,6 +1,6 @@
 """
 WHY NOT: for a time and a direction, every condition the bot checks and whether it passed, from the
-D1 / H4 bias down to the M1 trigger. Read-only: it runs strategy.backtest() with its trace switched on,
+trend (D1 / H4 / H1 bias) down to the M1 trigger. Read-only: it runs strategy.backtest() with its trace switched on,
 which records what each rule decided and changes nothing (tests/test_tools.py checks that).
 
     python tools/why_not.py --at "2024-03-05 14:20" --dir long              # +-15 min around that time
@@ -8,14 +8,14 @@ which records what each rule decided and changes nothing (tests/test_tools.py ch
     python tools/why_not.py --round 0                 # every missed trade of reports/round0/missed_dev.csv
 
 The sniper chain (strategy._sniper), in the bot's own order:
-  1. a POI is armed: price came back into a bullish M15 / M30 / H1 order block (its first touch), less
-     than a day ago, the order block not replaced by a newer one, no close below its higher low
+  1. a POI is armed: price came back into a bullish M15 / M30 / H1 order block or FVG (its first touch),
+     less than a day ago, the zone not replaced by a newer one, no close below its higher low
   2. no order already waiting in that direction (while one waits, sweep detection is off)
   3. M1 sweep: a candle trades below the last M1 swing low
   4. M1 break: within 30 candles, a close above the high of that drop (or the last swing high)
-  5. D1 and H4 bias both up (checked at the break; the POI is used up either way)
+  5. the trend up (Settings.TREND_TFS / TREND_NEED; checked at the break; the POI is used up either way)
   6. the stop is at least 0.25 ATR from the entry, and the entry is below the close
-The momentum chain (strategy._momentum): an M5 close above the last M5 swing high, D1 and H4 bias up,
+The momentum chain (strategy._momentum): an M5 close above the last M5 swing high, the trend up,
 the last closed M5 candle in a pause-up range, that pause not traded yet, room for the stop.
 Shorts: the same, mirrored.
 
@@ -45,7 +45,7 @@ WINDOW = pd.Timedelta("15min")
 LIMIT_BEFORE = pd.Timedelta("8h")
 # how far each stage got (higher = further along the chain)
 SNIPER_RANK = [("order placed", 9, ""), ("re-entry order placed", 9, ""),
-               ("sweep + break, but D1 / H4 bias disagree", 8, "blocked_by_filter:bias"),
+               ("sweep + break, but the trend disagrees", 8, "blocked_by_filter:bias"),
                ("sweep + break, but the order block is too close", 8, "blocked_by_filter:min_risk"),
                ("break, but the stop is too tight", 8, "blocked_by_filter:min_risk"),
                ("swept, waiting for the break", 6, "no_detection:m1_bos"),
@@ -61,7 +61,7 @@ SNIPER_RANK = [("order placed", 9, ""), ("re-entry order placed", 9, ""),
 MOMENTUM_RANK = [("order placed", 9, ""),
                  ("M5 break in a pause, but no room for a stop", 8, "blocked_by_filter:min_risk"),
                  ("M5 break, but this pause was already traded", 8, "blocked_by_filter:one_per_pause"),
-                 ("M5 break, but D1 / H4 bias disagree", 7, "blocked_by_filter:bias"),
+                 ("M5 break, but the trend disagrees", 7, "blocked_by_filter:bias"),
                  ("M5 break, but no", 5, "no_detection:m5_pause"),
                  ("no M5 break of structure", 3, "no_detection:m5_bos")]
 
@@ -110,13 +110,20 @@ def run_trace(df, wins, settings=None):
 
 
 # ----------------------------------------------------------------------------- explaining one trade
+BIAS = ("d1", "h4", "h1")
+
+
 def bias_at(sn, d, a, b):
+    """The D1 / H4 / H1 bias at the end of the window, and the share of the window the trend allowed d."""
     w = sn[(sn["direction"] == d) & (sn["time"] >= a) & (sn["time"] <= b)]
     if w.empty:
-        return np.nan, np.nan, 0.0
-    ok = (w["bias_d1"] == d) & (w["bias_h4"] == d)
+        return {k: np.nan for k in BIAS}, 0.0
     last = w.iloc[-1]
-    return int(last["bias_d1"]), int(last["bias_h4"]), float(ok.mean())
+    return {k: int(last[f"bias_{k}"]) for k in BIAS}, float((w["trend"] == d).mean())
+
+
+def bias_text(b):
+    return " ".join(f"{k.upper()} {v:+d}" for k, v in b.items() if np.isfinite(v))
 
 
 def furthest(rec, table, d, a, b, key="time"):
@@ -169,8 +176,8 @@ def explain(trade, bot, sn, mo, pois, marks):
         when = trade.fill_candle
     res = dict(id=trade.id, setup=trade.setup, start=trade.start, dir=trade.dir, order=trade.order,
                subtype=trade.subtype, entry=trade.entry, stop=trade.stop, window_from=a, window_to=b)
-    d1, h4, ok_share = bias_at(sn, d, a, b)
-    res.update(bias_d1=d1, bias_h4=h4, bias_ok_share=ok_share)
+    bias, ok_share = bias_at(sn, d, a, b)
+    res.update({f"bias_{k}": v for k, v in bias.items()}, trend_ok_share=ok_share)
     same = bot[(bot["d"] == d)]
     opp = bot[(bot["d"] == -d) & (bot["decided"] >= a) & (bot["decided"] <= b)]
     in_win = same[(same["decided"] >= a) & (same["decided"] <= b)]
@@ -236,13 +243,13 @@ def explain(trade, bot, sn, mo, pois, marks):
     if len(paths) > 1:
         res["other_path"] = f"{paths[1][0]}: {paths[1][1]['stage']}"
     cat = f["category"] or "other"
-    vals = f"bias D1 {d1:+d} H4 {h4:+d} at the end of the window ({ok_share:.0%} of it agreeing)" \
-        if np.isfinite(d1) else ""
+    vals = f"bias {bias_text(bias)} at the end of the window (the trend allowed your way {ok_share:.0%} of it)" \
+        if np.isfinite(bias["d1"]) else ""
     if cat == "blocked_by_filter:bias":
-        cat = "blocked_by_filter:bias_d1" if d1 != d else "blocked_by_filter:bias_h4" if h4 != d else cat
         row = f["row"]
-        vals = f"at {f['time']:%m-%d %H:%M}: D1 {int(row.get('bias_d1', 0)):+d} H4 {int(row.get('bias_h4', 0)):+d} " \
-               f"(your direction {d:+d})"
+        at_break = {k: int(row.get(f"bias_{k}", 0)) for k in BIAS}
+        cat = next((f"blocked_by_filter:bias_{k}" for k in BIAS if at_break[k] != d), cat)
+        vals = f"at {f['time']:%m-%d %H:%M}: {bias_text(at_break)} (your direction {d:+d})"
     elif cat == "no_detection:htf_poi":
         mine = marks_t[marks_t["step"].isin(["htf_poi", "h1_poi", "m15_poi", "htf_range"])]
         vals = f"your POI: {mark_text(mine)} | bot POIs nearest in time: " + \
@@ -277,8 +284,8 @@ def classify(missed, df=None, marks=None, settings=None):
     bot, sn, mo, pois = run_trace(df, wins, settings)
     bot["d"] = np.where(bot["dir"] == "long", 1, -1)
     if len(mo):     # a bias "no" only blocks a momentum trade if its pause range was on
-        no_pause = mo["stage"].str.startswith("M5 break, but D1 / H4 bias disagree") & (mo.get("pause_on", 0) != 1)
-        mo.loc[no_pause, "stage"] = "M5 break, but no M5 pause range in this direction (and the bias disagrees)"
+        no_pause = mo["stage"].str.startswith("M5 break, but the trend disagrees") & (mo.get("pause_on", 0) != 1)
+        mo.loc[no_pause, "stage"] = "M5 break, but no M5 pause range in this direction (and the trend disagrees)"
     rows = [explain(r, bot, sn, mo, pois, marks) for r in missed.itertuples()]
     return pd.DataFrame(rows), sn, mo
 
@@ -292,7 +299,8 @@ def print_one(at, d, before, after, settings=None):
     bot, sn, mo, pois = run_trace(df, [(a, b)], settings)
     pd.set_option("display.width", 250)
     pd.set_option("display.max_colwidth", 90)
-    cols = ["time", "bias_d1", "bias_h4", "poi", "pending", "machine", "swing_low", "swing_high", "break_level", "stage"]
+    cols = ["time", "bias_d1", "bias_h4", "bias_h1", "trend", "poi", "pending", "machine", "swing_low", "swing_high",
+            "break_level", "stage"]
     w = sn[sn["direction"] == d]
     print(f"SNIPER {'long' if d == 1 else 'short'} {a} -> {b} (candle closes):")
     print(w[cols].to_string(index=False) if len(w) else "  (no candles)")

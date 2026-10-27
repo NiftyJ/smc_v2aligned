@@ -1,7 +1,8 @@
 """
 THE STRATEGY: two intraday trades. Longs are described here; shorts are the mirror image.
 
-Bias first (bias.py): D1 and H4 both up for longs, both down for shorts.
+Trend first (bias.py): D1, H4 and H1 all up for longs, all down for shorts (Settings.TREND_TFS,
+TREND_NEED).
 
 1. SNIPER ENTRY
    * the POI: the bullish order block made by the most recent break of structure on M15, M30
@@ -57,6 +58,8 @@ class Settings:
     STAIR_TFS: tuple = ("15min", "30min", "1h")   # the sniper's POI: an order block / FVG on these timeframes
     REQUIRE_STAIRCASE: bool = False         # True = only order blocks inside a staircase range
     POI_KINDS: tuple = ("ob", "fvg")        # the sniper's POI zones on STAIR_TFS: order blocks and fair value gaps
+    TREND_TFS: tuple = ("d1", "h4", "h1")   # the trend (bias.py) on these timeframes ...
+    TREND_NEED: int = 3                     # ... at least this many pointing the trade's way (more than half)
     PAUSE_TFS: tuple = ("5min",)            # where the momentum order looks for a pause (5 min ranges)
     SNIPER_MIN_R: float = 12.0              # sniper take-profit: at least 12R
     MOMENTUM_R: float = 10.0                # momentum take-profit: 10R
@@ -92,6 +95,14 @@ def shapes(df, tf):
         out[f"{name}_top"] = np.where(is_up, up[1], -dn[2])
         out[f"{name}_bottom"] = np.where(is_up, up[2], -dn[1])
     return out
+
+
+def trend_of(bias, s):
+    """The direction trades may take on each candle: +1 / -1 when at least s.TREND_NEED of the trends on
+    s.TREND_TFS (bias.py, closed candles) point that way, else 0."""
+    votes = np.array([bias[f"bias_{k}"].to_numpy() for k in s.TREND_TFS])
+    up, down = (votes == 1).sum(axis=0), (votes == -1).sum(axis=0)
+    return np.where(up >= s.TREND_NEED, 1, np.where(down >= s.TREND_NEED, -1, 0))
 
 
 def last_closed(index, tf, times):
@@ -283,7 +294,8 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
         owner[d] = own
     flipped = {d: mirror(o, h, l, c, d) for d in (1, -1)}
     machines = {d: SweepMachine(*flipped[d], a, s) for d in (1, -1)}
-    b1, b4 = bias["bias_d1"].to_numpy(), bias["bias_h4"].to_numpy()
+    b1, b4, b_1h = (bias[f"bias_{k}"].to_numpy() for k in ("d1", "h4", "h1"))
+    trend = trend_of(bias, s)
     pending = {1: None, -1: None}                       # the order waiting to be filled, per direction
     last_owner = {1: -1, -1: -1}
     rearm = {1: None, -1: None}                         # after a stop-out: waiting for a new M1 break up
@@ -324,7 +336,8 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
             rec = None
             if trace is not None and t in trace["bars"]:
                 sl, sh = m.sw.last_low, m.sw.last_high
-                rec = dict(t=t, direction=d, bias_d1=int(b1[t]), bias_h4=int(b4[t]), poi=int(p),
+                rec = dict(t=t, direction=d, bias_d1=int(b1[t]), bias_h4=int(b4[t]), bias_h1=int(b_1h[t]),
+                           trend=int(trend[t]), poi=int(p),
                            poi_before_use=int(owner0[d][t]), machine=m.why, machine_state=m.state,
                            swing_low=d * sl.price if sl is not None else np.nan,
                            swing_high=d * sh.price if sh is not None else np.nan,
@@ -381,7 +394,7 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
                     if r_["ext_bar"] < 0 or L[t] < L[r_["ext_bar"]]:
                         r_["ext_bar"] = t                       # the lowest point since the stop-out
                     level = H[r_["from_bar"]:r_["ext_bar"] + 1].max()   # the failed try's high, or higher
-                    if t > r_["ext_bar"] and C[t] > level and b1[t] == d and b4[t] == d:
+                    if t > r_["ext_bar"] and C[t] > level and trend[t] == d:
                         leg = r_["ext_bar"]
                         q = place(d, t, find_order_block(O, H, L, C, leg)[0], L[leg], 1, None)
                         if q is not None:
@@ -399,9 +412,9 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
             t1 = pois_by_dir[d][p][1]
             seg = owner[d][t + 1:t1]
             seg[seg == p] = -1                          # one setup per touch
-            if b1[t] != d or b4[t] != d:
+            if trend[t] != d:
                 if rec is not None:
-                    rec["stage"] = "sweep + break, but D1 / H4 bias disagree (the POI is used up)"
+                    rec["stage"] = "sweep + break, but the trend disagrees (the POI is used up)"
                 continue
             info = dict(pois_by_dir[d][p][2], sweep_time=pd.Timestamp(times[cand["sweep_bar"]]),
                         swept=d * cand["swept"], broken=d * cand["broken"],
@@ -440,7 +453,8 @@ def _momentum(df, s, bias, z, base, live=None, trace=None):
     times = df.index.to_numpy()
     closes_t = times + base.to_timedelta64()
     l, h, c = (df[k].to_numpy(float) for k in ("low", "high", "close"))
-    b1, b4 = bias["bias_d1"].to_numpy(), bias["bias_h4"].to_numpy()
+    b1, b4, b_1h = (bias[f"bias_{k}"].to_numpy() for k in ("d1", "h4", "h1"))
+    trend = trend_of(bias, s)
     tables = {}
     for tf in s.PAUSE_TFS:
         P = shapes(df, tf)
@@ -471,10 +485,10 @@ def _momentum(df, s, bias, z, base, live=None, trace=None):
                 continue
             j = int(np.searchsorted(closes_t, m5_close[m]))   # the base candle closing with this M5 candle
             if rec is not None and j < len(df):
-                rec.update(bias_d1=int(b1[j]), bias_h4=int(b4[j]))
-            if j >= len(df) or closes_t[j] != m5_close[m] or b1[j] != d or b4[j] != d:
+                rec.update(bias_d1=int(b1[j]), bias_h4=int(b4[j]), bias_h1=int(b_1h[j]), trend=int(trend[j]))
+            if j >= len(df) or closes_t[j] != m5_close[m] or trend[j] != d:
                 if rec is not None:
-                    rec["stage"] = "M5 break, but D1 / H4 bias disagree" if j < len(df) and closes_t[j] == m5_close[m] \
+                    rec["stage"] = "M5 break, but the trend disagrees" if j < len(df) and closes_t[j] == m5_close[m] \
                         else "M5 break, but no M1 candle closes with it"
                 continue
             for tf, (P, kpos, since) in tables.items():

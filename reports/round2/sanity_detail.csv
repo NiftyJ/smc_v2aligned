@@ -1,0 +1,236 @@
+id,order,outcome,data,entry_in,level_is_close,half_rule,fill_side_in,first_fill_min
+211,limit,not filled,True,False,False,False,False,
+205,limit,stop,True,False,False,False,False,2.0
+202,limit,stop,True,False,False,False,False,1.0
+214,half,not filled,True,False,True,True,False,
+224,limit,target,True,False,False,False,False,1.0
+217,limit,not filled,True,False,False,False,False,
+228,limit,not filled,True,False,False,False,False,
+233,half,not filled,True,False,True,True,False,3072.0
+238,half,stop,True,True,True,True,True,0.0
+270,market,target,True,False,False,False,True,0.0
+274,half,not filled,True,False,True,True,False,1069.0
+283,limit,stop,True,False,False,False,False,115.0
+284,limit,stop,True,True,False,False,True,0.0
+286,limit,target,True,True,False,False,True,0.0
+291,limit,stop,True,False,False,False,False,1.0
+295,limit,stop,True,False,False,False,False,1.0
+298,limit,stop,True,False,False,False,False,27.0
+317,limit,stop,True,False,False,False,False,7.0
+319,limit,target,True,True,False,False,True,0.0
+248,half,target,True,False,True,True,False,81.0
+247,half,stop,True,False,True,True,False,65.0
+257,limit,not filled,True,False,False,False,False,603.0
+18,market,target,True,True,False,False,True,0.0
+49,limit,target,True,False,False,False,True,0.0
+70,limit,target,True,True,False,False,True,0.0
+81,limit,target,True,False,False,False,True,0.0
+90,limit,target,True,True,False,False,True,0.0
+117,limit,target,True,True,False,False,True,0.0
+123,half,target,True,True,True,True,True,0.0
+126,limit,target,True,True,False,False,True,0.0
+135,half,target,True,False,True,True,False,61.0
+144,half,target,True,False,True,True,False,144.0
+160,limit,target,True,False,False,False,False,63.0
+189,half,target,True,False,True,True,False,3448.0
+174,half,stop,True,False,True,True,False,34.0
+195,half,stop,True,False,True,True,False,2.0
+332,half,target,True,False,True,True,False,3.0
+330,limit,not filled,True,False,False,False,False,
+337,limit,target,True,False,False,False,False,2.0
+356,limit,not filled,True,False,False,False,False,
+361,limit,not filled,True,False,False,False,False,2485.0
+363,half,target,True,False,True,True,False,1.0
+371,limit,target,True,True,False,False,True,0.0
+376,limit,target,True,True,False,False,True,0.0
+381,limit,target,True,True,False,False,True,0.0
+386,limit,stop,True,False,False,False,False,212.0
+390,half,stop,True,False,True,True,False,156.0
+393,half,stop,True,False,True,True,False,12.0
+398,half,not filled,True,False,True,True,False,
+410,limit,target,True,True,False,False,True,0.0
+409,half,not filled,True,False,True,True,False,
+415,limit,target,True,True,False,False,True,0.0
+419,limit,stop,True,True,False,False,True,0.0
+423,limit,not filled,True,False,False,False,False,
+427,limit,target,True,False,False,False,False,3.0
+437,limit,stop,True,True,False,False,True,0.0
+445,half,stop,True,False,True,True,False,1129.0
+451,limit,stop,True,False,False,False,False,410.0
+485,half,stop,True,False,True,True,False,33.0
+484,limit,stop,True,False,False,False,False,29.0
+488,limit,target,True,False,False,False,False,8.0
+494,limit,stop,True,False,False,False,False,115.0
+496,limit,not filled,True,False,False,False,False,
+498,half,not filled,True,False,True,True,False,444.0
+502,limit,target,True,False,False,False,False,9.0
+510,limit,target,True,False,False,False,False,8.0
+507,limit,not filled,True,False,False,False,False,
+515,limit,not filled,True,False,False,False,False,
+518,limit,target,True,False,False,False,False,27.0
+462,half,not filled,True,False,True,True,False,
+467,half,target,True,False,True,True,False,3.0
+541,limit,stop,True,False,False,False,True,0.0
+532,limit,target,True,True,False,False,True,0.0
+536,limit,target,True,True,False,False,True,0.0
+544,limit,stop,True,False,False,False,False,167.0
+549,half,target,True,False,True,True,False,3.0
+553,limit,target,True,True,False,False,True,0.0
+558,limit,stop,True,True,False,False,True,0.0
+564,limit,stop,True,False,False,False,False,54.0
+582,limit,not filled,True,False,False,False,False,249.0
+583,limit,stop,True,False,False,False,False,60.0
+590,limit,stop,True,False,False,False,False,13.0
+593,limit,stop,True,False,False,False,False,43.0
+599,limit,not filled,True,False,False,False,False,
+603,limit,target,True,False,False,False,False,70.0
+612,limit,target,True,False,False,False,False,15.0
+620,half,stop,True,False,True,True,False,6.0
+619,limit,not filled,True,False,False,False,False,550.0
+628,limit,target,True,False,False,False,False,5.0
+635,limit,stop,True,False,False,False,False,674.0
+640,limit,not filled,True,False,False,False,False,
+706,limit,stop,True,False,False,False,False,635.0
+649,limit,not filled,True,False,False,False,False,
+659,limit,not filled,True,False,False,False,False,987.0
+666,limit,stop,True,False,False,False,True,0.0
+730,limit,target,True,False,False,False,False,72.0
+669,limit,stop,True,False,False,False,False,10.0
+677,limit,not filled,True,False,False,False,False,
+676,limit,stop,True,False,False,False,False,1365.0
+690,half,not filled,True,False,True,True,False,
+695,limit,not filled,True,False,False,False,False,
+698,limit,target,True,True,False,False,True,0.0
+741,half,not filled,True,False,True,True,False,
+747,half,target,True,False,True,True,False,5.0
+764,limit,not filled,True,False,False,False,False,
+767,limit,not filled,True,False,False,False,False,
+770,limit,target,True,False,False,False,False,28.0
+780,half,not filled,True,False,True,True,False,
+787,limit,target,True,False,False,False,False,4.0
+790,limit,not filled,True,False,False,False,False,
+785,limit,target,True,False,False,False,False,30.0
+797,limit,target,True,False,False,False,False,103.0
+812,limit,stop,True,False,False,False,False,19.0
+819,market,target,True,True,False,False,True,0.0
+817,limit,not filled,True,False,False,False,False,
+825,market,stop,True,True,False,False,True,0.0
+831,limit,target,True,True,False,False,True,0.0
+850,limit,target,True,True,False,False,True,0.0
+856,limit,not filled,True,False,False,False,False,
+858,half,target,True,False,True,True,False,1087.0
+867,limit,target,True,False,False,False,False,597.0
+874,limit,target,True,False,False,False,False,1.0
+882,limit,stop,True,False,False,False,False,90.0
+886,limit,not filled,True,False,False,False,False,
+890,limit,target,True,False,False,False,False,42.0
+877,limit,stop,True,True,False,False,True,0.0
+895,limit,stop,True,True,False,False,True,0.0
+896,limit,not filled,True,False,False,False,False,
+899,limit,target,True,False,False,False,False,15.0
+904,limit,not filled,True,False,False,False,False,
+907,limit,target,True,False,False,False,False,15.0
+914,half,not filled,True,False,True,True,False,
+921,limit,target,True,True,False,False,True,0.0
+938,limit,stop,True,False,False,False,False,468.0
+940,limit,not filled,True,False,False,False,False,
+943,half,not filled,True,False,True,True,False,
+948,limit,target,True,False,False,False,False,10.0
+954,limit,stop,True,False,False,False,False,127.0
+960,limit,stop,True,True,False,False,True,0.0
+967,half,not filled,True,False,True,True,False,
+977,half,target,True,False,True,True,False,7.0
+974,limit,not filled,True,False,False,False,False,
+980,limit,stop,True,False,False,False,False,31.0
+984,limit,stop,True,False,False,False,False,22.0
+987,half,not filled,True,False,True,True,False,
+1007,limit,target,True,False,False,False,False,1.0
+1019,limit,stop,True,True,False,False,True,0.0
+1026,limit,stop,True,False,False,False,False,15.0
+1031,half,not filled,True,False,True,True,False,237.0
+1033,limit,target,True,False,False,False,False,3.0
+1041,limit,stop,True,False,False,False,False,211.0
+1044,limit,not filled,True,False,False,False,False,63.0
+1042,limit,stop,True,False,False,False,False,35.0
+1043,limit,stop,True,False,False,False,False,37.0
+1046,limit,stop,True,False,False,False,False,1.0
+1053,half,target,True,False,True,True,False,4.0
+1054,limit,target,True,False,False,False,True,0.0
+1057,limit,target,True,True,False,False,True,0.0
+1061,limit,stop,True,False,False,False,False,3.0
+1062,half,target,True,False,True,True,False,4.0
+1071,limit,stop,True,False,False,False,False,73.0
+1078,half,target,True,False,True,True,False,31.0
+1081,limit,stop,True,False,False,False,False,3.0
+1092,half,stop,True,False,True,True,False,217.0
+1099,half,not filled,True,False,True,True,False,
+1104,half,stop,True,False,True,True,False,26.0
+1103,limit,target,True,False,False,False,False,6.0
+1111,limit,stop,True,False,False,False,False,54.0
+1123,limit,stop,True,True,False,False,True,0.0
+1130,half,not filled,True,False,True,True,False,
+1132,limit,target,True,True,False,False,True,0.0
+1137,half,stop,True,False,True,True,False,17.0
+1146,half,stop,True,False,True,True,False,1000.0
+1153,half,stop,True,False,True,True,False,3.0
+1157,limit,stop,True,False,False,False,False,11.0
+1161,limit,not filled,True,False,False,False,False,
+1163,limit,stop,True,False,False,False,False,32.0
+1176,limit,stop,True,False,False,False,False,395.0
+1191,limit,stop,True,False,False,False,False,80.0
+1184,half,target,True,False,True,True,False,3286.0
+1194,half,stop,True,False,True,True,False,21.0
+1172,half,target,True,False,True,True,False,10.0
+1201,half,stop,True,False,True,True,False,210.0
+1213,half,target,True,False,True,True,False,289.0
+1221,limit,not filled,True,False,False,False,False,
+1218,limit,not filled,True,False,False,False,False,
+1227,limit,stop,True,False,False,False,False,3.0
+1235,limit,target,True,True,False,False,True,0.0
+1247,limit,stop,True,False,False,False,False,2.0
+1248,limit,stop,True,False,False,False,False,18.0
+1249,limit,stop,True,False,False,False,False,13.0
+1241,limit,stop,True,False,False,False,False,26.0
+1251,half,stop,True,False,True,True,False,1017.0
+1252,limit,target,True,False,False,False,False,684.0
+1258,limit,stop,True,False,False,False,False,39.0
+1270,limit,stop,True,False,False,False,False,92.0
+1277,limit,target,True,True,False,False,True,0.0
+1289,limit,target,True,False,False,False,False,2.0
+1310,limit,stop,True,False,False,False,False,365.0
+1304,limit,target,True,True,False,False,True,0.0
+1311,limit,stop,True,False,False,False,False,604.0
+1315,limit,stop,True,True,False,False,True,0.0
+1321,limit,stop,True,True,False,False,True,0.0
+1328,half,not filled,True,False,True,True,False,
+1331,half,stop,True,False,True,True,False,7.0
+1338,limit,target,True,False,False,False,False,19.0
+1343,half,not filled,True,False,True,True,False,
+1348,half,target,True,False,True,True,False,2.0
+1350,limit,stop,True,True,False,False,True,0.0
+1356,half,target,True,False,True,True,False,2.0
+1366,half,target,True,False,True,True,False,1.0
+1375,half,target,True,False,True,True,False,8.0
+1381,half,target,True,False,True,True,False,4.0
+1389,limit,target,True,True,False,False,True,0.0
+1395,limit,target,True,True,False,False,True,0.0
+1426,limit,stop,True,False,False,False,False,6.0
+1427,limit,stop,True,False,False,False,False,11.0
+1428,limit,stop,True,False,False,False,False,11.0
+1429,limit,stop,True,False,False,False,False,44.0
+1430,limit,stop,True,True,False,False,True,4.0
+1418,half,target,True,False,True,True,False,43.0
+1425,limit,target,True,False,False,False,False,166.0
+1441,limit,stop,True,True,False,False,True,0.0
+1449,half,target,True,True,True,True,True,0.0
+1453,half,stop,True,False,True,True,False,266.0
+1467,half,not filled,True,False,True,True,False,
+1465,limit,target,True,False,False,False,False,83.0
+1470,limit,target,True,False,False,False,False,2.0
+1460,half,not filled,True,False,True,True,False,
+1473,limit,stop,True,True,False,False,True,0.0
+1478,limit,stop,True,True,False,False,True,0.0
+1477,limit,stop,True,False,False,False,False,8.0
+1481,limit,target,True,True,False,False,True,0.0
+1489,limit,stop,True,False,False,False,False,72.0
+1493,limit,target,True,False,False,False,False,2.0
