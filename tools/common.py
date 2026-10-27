@@ -94,6 +94,12 @@ def bot_trades(df, settings=None, trace=None):
     s = settings or Settings()
     journal = []
     tr = backtest(df, s, journal=journal, trace=trace)
+    return orders_table(tr, journal, s)
+
+
+def orders_table(tr, journal, settings=None):
+    """bot_trades() from a backtest already run: tr = backtest()'s trades, journal = its journal."""
+    s = settings or Settings()
     rows = []
     first = {(j["direction"], j["placed"], j["filled"]): j["first_placed"] for j in journal if j["event"] == "filled"}
     for r in tr.to_dict("records"):
@@ -144,6 +150,14 @@ def bot_trades(df, settings=None, trace=None):
         if k in t:
             out[k] = t[k].to_numpy()
     return out
+
+
+def low_priority():
+    """Windows: run this process below normal priority, so a live bot on the same machine keeps the CPU."""
+    if os.name == "nt":
+        import ctypes
+        k = ctypes.windll.kernel32
+        k.SetPriorityClass(k.GetCurrentProcess(), 0x4000)          # BELOW_NORMAL_PRIORITY_CLASS
 
 
 def results(trades):
