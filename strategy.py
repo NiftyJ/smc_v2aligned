@@ -5,8 +5,9 @@ Trend first (bias.py): D1, H4 and H1 all up for longs, all down for shorts (Sett
 TREND_NEED).
 
 1. SNIPER ENTRY
-   * the POI: the most recent bullish fair value gap on M15, M30 or H1 (poi.py); a newer one
-     replaces it. Its "higher low" below is its bottom. (POI_KINDS = ("ob", "fvg") also arms the
+   * the POI: the most recent bullish fair value gap on M15, M30 or H1 (poi.py) whose gap is at
+     least half an ATR of that timeframe (FVG_MIN_ATR); a newer one replaces it. Its "higher
+     low" below is its bottom. (POI_KINDS = ("ob", "fvg") also arms the
      bullish order block made by the most recent break of structure, at the most recent higher
      low. REQUIRE_STAIRCASE = True: only zones inside a staircase up range.)
    * price comes back into that zone (its first touch)
@@ -59,6 +60,8 @@ class Settings:
     REQUIRE_STAIRCASE: bool = False         # True = only zones inside a staircase range
     POI_KINDS: tuple = ("fvg",)             # the sniper's POI zones on STAIR_TFS: fair value gaps (your marks: 36 of 44
                                             # M15+ zones are FVGs); ("ob", "fvg") = order blocks too
+    FVG_MIN_ATR: float = 0.5                # an FVG is a POI only if its gap is at least this many ATRs (14) of its own
+                                            # timeframe: every FVG you marked is >= 0.45 (median 1.04); half of all are < 0.27
     TREND_TFS: tuple = ("d1", "h4", "h1")   # the trend (bias.py) on these timeframes ...
     TREND_NEED: int = 3                     # ... at least this many pointing the trade's way (more than half)
     PAUSE_TFS: tuple = ("5min",)            # where the momentum order looks for a pause (5 min ranges)
@@ -249,6 +252,13 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
         for d in (1, -1):
             side = "bull" if d == 1 else "bear"
             obs = zt[zt["type"].isin([f"{side}_{k}" for k in s.POI_KINDS])].reset_index(drop=True)
+            if s.FVG_MIN_ATR > 0:                       # a real imbalance: a gap at least FVG_MIN_ATR ATRs tall
+                bars = resample(df, tf)
+                a_tf = atr(*(bars[k].to_numpy(float) for k in ("high", "low", "close")), s.ATR_N)
+                pos = np.clip(bars.index.searchsorted(obs["formed"]), 0, len(bars) - 1)
+                small = (obs["type"] == f"{side}_fvg").to_numpy() & \
+                    ((obs["top"] - obs["bottom"]).to_numpy() < s.FVG_MIN_ATR * a_tf[pos])
+                obs = obs[~small].reset_index(drop=True)
             kb = st.index.searchsorted(obs["known"] - pd.Timedelta(tf))        # the break-of-structure candle
             kb_ok = (kb < len(st)) & (st.index[np.minimum(kb, len(st) - 1)] == obs["known"] - pd.Timedelta(tf))
             kb = np.minimum(kb, len(st) - 1)
