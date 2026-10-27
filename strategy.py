@@ -5,10 +5,10 @@ Trend first (bias.py): D1, H4 and H1 all up for longs, all down for shorts (Sett
 TREND_NEED).
 
 1. SNIPER ENTRY
-   * the POI: the bullish order block made by the most recent break of structure on M15, M30
-     or H1, at the most recent higher low (poi.py), or the most recent bullish fair value gap
-     on those timeframes. A newer one of the same kind replaces it. (REQUIRE_STAIRCASE = True:
-     only zones inside a staircase up range.) An FVG's "higher low" below is its bottom.
+   * the POI: the most recent bullish fair value gap on M15, M30 or H1 (poi.py); a newer one
+     replaces it. Its "higher low" below is its bottom. (POI_KINDS = ("ob", "fvg") also arms the
+     bullish order block made by the most recent break of structure, at the most recent higher
+     low. REQUIRE_STAIRCASE = True: only zones inside a staircase up range.)
    * price comes back into that zone (its first touch)
    * then on M1: a range forms there; its low is swept (a candle trades below the last M1 swing
      low), then a candle closes above the real M1 swing high: the highest high between the sweep and
@@ -55,9 +55,10 @@ from poi import pois, targets, _first_at_or_below  # noqa: E402
 
 @dataclass
 class Settings:
-    STAIR_TFS: tuple = ("15min", "30min", "1h")   # the sniper's POI: an order block / FVG on these timeframes
-    REQUIRE_STAIRCASE: bool = False         # True = only order blocks inside a staircase range
-    POI_KINDS: tuple = ("ob", "fvg")        # the sniper's POI zones on STAIR_TFS: order blocks and fair value gaps
+    STAIR_TFS: tuple = ("15min", "30min", "1h")   # the sniper's POI: a zone (POI_KINDS) on these timeframes
+    REQUIRE_STAIRCASE: bool = False         # True = only zones inside a staircase range
+    POI_KINDS: tuple = ("fvg",)             # the sniper's POI zones on STAIR_TFS: fair value gaps (your marks: 36 of 44
+                                            # M15+ zones are FVGs); ("ob", "fvg") = order blocks too
     TREND_TFS: tuple = ("d1", "h4", "h1")   # the trend (bias.py) on these timeframes ...
     TREND_NEED: int = 3                     # ... at least this many pointing the trade's way (more than half)
     PAUSE_TFS: tuple = ("5min",)            # where the momentum order looks for a pause (5 min ranges)
