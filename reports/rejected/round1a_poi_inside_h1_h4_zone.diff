@@ -1,0 +1,66 @@
+# REJECTED, round 1, attempt a: "An M15/M30/H1 POI counts only if it sits inside an H1 or H4 order block or FVG
+# of its direction that is known and has not been closed through."
+# Tried on the baseline (order-block POIs only) with HTF_ZONE_TFS = (1h, 4h) and with (1h, 4h, 1D).
+# Dev results: recall 3.1% -> 2.1% for both. Precision 1.3% -> 1.2% with (1h, 4h) and 1.1% with (1h, 4h, 1D).
+# Both numbers fell, so the change was reverted.
+# The code below is shown on top of the kept round-1 change (FVG POIs).
+--- a/strategy.py
++++ b/strategy.py
+@@ -55,6 +55,8 @@
+ class Settings:
+     STAIR_TFS: tuple = ("15min", "30min", "1h")   # the sniper's POI: an order block on these timeframes
+     REQUIRE_STAIRCASE: bool = False         # True = only order blocks inside a staircase range
++    HTF_ZONE_TFS: tuple = ("1h", "4h")      # the POI must sit inside an order block / FVG of its direction on
++                                            # these timeframes (known, not closed through); () = any POI
+     POI_KINDS: tuple = ("ob", "fvg")        # the sniper's POI zones on STAIR_TFS: order blocks and fair value gaps
+     PAUSE_TFS: tuple = ("5min",)            # where the momentum order looks for a pause (5 min ranges)
+     SNIPER_MIN_R: float = 12.0              # sniper take-profit: at least 12R
+@@ -219,6 +221,30 @@
+     return row
+ 
+ 
++def _htf_zones(df, s, c, closes_t):
++    """The order blocks and FVGs on s.HTF_ZONE_TFS, each with the candle it is known at and the first
++    candle closing beyond its far edge (it counts in between)."""
++    hz = pois(df, tfs=s.HTF_ZONE_TFS, swing_n=s.SWING_N)
++    hz = hz[hz["type"].str.endswith(("_ob", "_fvg"))].reset_index(drop=True)
++    n = len(c)
++    zdir = hz["dir"].to_numpy()
++    since = np.searchsorted(closes_t, hz["known"].to_numpy(), side="left")
++    far = np.where(zdir == 1, hz["bottom"], hz["top"]).astype(float)
++    until = np.full(len(hz), n)
++    for d in (1, -1):
++        k = zdir == d
++        until[k] = first_beyond(c, np.minimum(since[k], n - 1), far[k], d)
++    return dict(key=list(zip(hz["tf"], hz["type"], hz["formed"])), dir=zdir, top=hz["top"].to_numpy(float),
++                bottom=hz["bottom"].to_numpy(float), since=since, until=until)
++
++
++def _inside(nest, d, t, top, bottom, key):
++    """Does the zone [bottom, top], touched at candle t, sit in a higher-timeframe zone of direction d that
++    counts at t (overlapping it; not the zone itself)?"""
++    ok = (nest["dir"] == d) & (nest["since"] <= t) & (nest["until"] > t) & (nest["bottom"] <= top) & (nest["top"] >= bottom)
++    return any(nest["key"][j] != key for j in np.flatnonzero(ok))
++
++
+ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
+     """journal (list, optional): every order's end is appended (filled, cancelled + why, or still waiting at
+     the last candle), so orders that never fill can be listed too. trace (dict with "bars": a set of candle
+@@ -229,6 +255,7 @@
+     closes_t = times + base.to_timedelta64()
+     a = atr(h, l, c, s.ATR_N)
+     window = int(pd.Timedelta(s.SNIPER_WINDOW) / base)
++    nest = _htf_zones(df, s, c, closes_t) if s.HTF_ZONE_TFS else None
+     pois_by_dir = {1: [], -1: []}                      # (touch bar, end bar, info) per direction
+     for tf in s.STAIR_TFS:
+         st = shapes(df, tf)
+@@ -264,6 +291,9 @@
+             gone = np.where(touch < n, gone, n)
+             for i in range(len(obs)):
+                 if touch[i] >= min(replaced[i], n):
++                    continue
++                if nest is not None and not _inside(nest, d, touch[i], obs["top"][i], obs["bottom"][i],
++                                                    (tf, obs["type"][i], obs["formed"][i])):
+                     continue
+                 end = min(replaced[i], gone[i], touch[i] + window, n)
+                 if end > touch[i]:

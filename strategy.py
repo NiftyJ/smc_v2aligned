@@ -5,9 +5,10 @@ Bias first (bias.py): D1 and H4 both up for longs, both down for shorts.
 
 1. SNIPER ENTRY
    * the POI: the bullish order block made by the most recent break of structure on M15, M30
-     or H1, at the most recent higher low (poi.py). A newer one replaces it. (REQUIRE_STAIRCASE
-     = True: only order blocks inside a staircase up range.)
-   * price comes back into that order block (its first touch)
+     or H1, at the most recent higher low (poi.py), or the most recent bullish fair value gap
+     on those timeframes. A newer one of the same kind replaces it. (REQUIRE_STAIRCASE = True:
+     only zones inside a staircase up range.) An FVG's "higher low" below is its bottom.
+   * price comes back into that zone (its first touch)
    * then on M1: a range forms there; its low is swept (a candle trades below the last M1 swing
      low), then a candle closes above the real M1 swing high: the highest high between the sweep and
      the lowest point after it, or the last swing high if higher (no new low for 30 candles = reset)
@@ -53,8 +54,9 @@ from poi import pois, targets, _first_at_or_below  # noqa: E402
 
 @dataclass
 class Settings:
-    STAIR_TFS: tuple = ("15min", "30min", "1h")   # the sniper's POI: an order block on these timeframes
+    STAIR_TFS: tuple = ("15min", "30min", "1h")   # the sniper's POI: an order block / FVG on these timeframes
     REQUIRE_STAIRCASE: bool = False         # True = only order blocks inside a staircase range
+    POI_KINDS: tuple = ("ob", "fvg")        # the sniper's POI zones on STAIR_TFS: order blocks and fair value gaps
     PAUSE_TFS: tuple = ("5min",)            # where the momentum order looks for a pause (5 min ranges)
     SNIPER_MIN_R: float = 12.0              # sniper take-profit: at least 12R
     MOMENTUM_R: float = 10.0                # momentum take-profit: 10R
@@ -233,7 +235,8 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
         st = shapes(df, tf)
         zt = pois(df, tfs=(tf,), swing_n=s.SWING_N)
         for d in (1, -1):
-            obs = zt[zt["type"] == ("bull_ob" if d == 1 else "bear_ob")].reset_index(drop=True)
+            side = "bull" if d == 1 else "bear"
+            obs = zt[zt["type"].isin([f"{side}_{k}" for k in s.POI_KINDS])].reset_index(drop=True)
             kb = st.index.searchsorted(obs["known"] - pd.Timedelta(tf))        # the break-of-structure candle
             kb_ok = (kb < len(st)) & (st.index[np.minimum(kb, len(st) - 1)] == obs["known"] - pd.Timedelta(tf))
             kb = np.minimum(kb, len(st) - 1)
@@ -245,8 +248,18 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
             if obs.empty:
                 continue
             known_bar = np.searchsorted(times, obs["known"].to_numpy(), side="left")
-            replaced = np.r_[known_bar[1:], n]                                  # a newer one replaces it
-            used = obs["used"].to_numpy()
+            kind = obs["type"].to_numpy()
+            replaced = np.full(len(obs), n)
+            for k in set(kind):                                                 # a newer one (of its kind) replaces it
+                same = np.flatnonzero(kind == k)
+                replaced[same] = np.r_[known_bar[same][1:], n]
+            used = obs["used"].to_numpy().copy()
+            fvg = kind == f"{side}_fvg"
+            if fvg.any():                       # an FVG: touched on the first trade into its near edge (pois(): filled)
+                j = _first_at_or_below(l if d == 1 else -h, known_bar[fvg],
+                                       obs["top"].to_numpy(float)[fvg] if d == 1 else -obs["bottom"].to_numpy(float)[fvg])
+                used[fvg] = np.where(j < n, closes_t[np.minimum(j, n - 1)], np.datetime64("NaT", "ns"))
+                obs.loc[fvg, "origin"] = obs.loc[fvg, "bottom" if d == 1 else "top"]   # its HL: the far edge
             touch = np.where(pd.isna(used), n, np.searchsorted(closes_t, np.where(pd.isna(used), closes_t[0], used)))
             gone = first_beyond(c, np.minimum(touch, n - 1), obs["origin"].to_numpy(), d)   # close beyond the HL
             gone = np.where(touch < n, gone, n)
@@ -255,7 +268,8 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
                     continue
                 end = min(replaced[i], gone[i], touch[i] + window, n)
                 if end > touch[i]:
-                    pois_by_dir[d].append((touch[i], end, dict(tf=tf, poi_top=obs["top"][i], poi_bottom=obs["bottom"][i],
+                    pois_by_dir[d].append((touch[i], end, dict(tf=tf, poi_type=kind[i].split("_")[1],
+                                                               poi_top=obs["top"][i], poi_bottom=obs["bottom"][i],
                                                                hl=obs["origin"][i], poi_formed=obs["formed"][i],
                                                                poi_known=obs["known"][i], poi_touch=used[i])))
     if trace is not None:                               # the POIs and when each one arms the M1 entry

@@ -82,8 +82,8 @@ def period_of(times):
 
 
 # ----------------------------------------------------------------------------- the bot's trades
-SNIPER_FILTERS = "bias_d1;bias_h4;poi_{tf}_ob_touched;m1_sweep;m1_bos;min_risk"
-REENTRY_FILTERS = "bias_d1;bias_h4;poi_{tf}_ob_touched;stopped_before;m1_break_after_stop;min_risk"
+SNIPER_FILTERS = "bias_d1;bias_h4;poi_{tf}_{zone}_touched;m1_sweep;m1_bos;min_risk"
+REENTRY_FILTERS = "bias_d1;bias_h4;poi_{tf}_{zone}_touched;stopped_before;m1_break_after_stop;min_risk"
 MOMENTUM_FILTERS = "m5_bos;bias_d1;bias_h4;{tf}_pause;pause_not_traded;room_for_stop"
 
 
@@ -120,8 +120,9 @@ def bot_trades(df, settings=None, trace=None):
     sn = (t["type"] == "sniper").to_numpy()
     shot = (t["shot"].fillna(1).astype(int) if "shot" in t else pd.Series(1, index=t.index)).to_numpy()
     steps = (t["order"] if "order" in t else pd.Series("", index=t.index)).fillna("").to_numpy()
-    rule = [(f"sniper re-entry (try {k})" if k > 1 else "sniper") + f" | {tf} OB | {o}" if is_sn
-            else f"momentum | {tf} pause" for is_sn, k, tf, o in zip(sn, shot, t["tf"], steps)]
+    zone = (t["poi_type"] if "poi_type" in t else pd.Series("ob", index=t.index)).fillna("ob").to_numpy()
+    rule = [(f"sniper re-entry (try {k})" if k > 1 else "sniper") + f" | {tf} {zk.upper()} | {o}" if is_sn
+            else f"momentum | {tf} pause" for is_sn, k, tf, o, zk in zip(sn, shot, t["tf"], steps, zone)]
     out = pd.DataFrame({
         "id": np.arange(1, len(t) + 1),
         "decided": t["placed"].to_numpy(),
@@ -130,8 +131,8 @@ def bot_trades(df, settings=None, trace=None):
         "entry": t["entry"].to_numpy(), "stop": t["stop"].to_numpy(), "target": t["target"].to_numpy(),
         "fill_time": t["filled"].to_numpy(),
         "rule": rule,
-        "filters_passed": [(REENTRY_FILTERS if k > 1 else SNIPER_FILTERS).format(tf=tf) if is_sn
-                           else MOMENTUM_FILTERS.format(tf=tf) for is_sn, k, tf in zip(sn, shot, t["tf"])],
+        "filters_passed": [(REENTRY_FILTERS if k > 1 else SNIPER_FILTERS).format(tf=tf, zone=zk) if is_sn
+                           else MOMENTUM_FILTERS.format(tf=tf) for is_sn, k, tf, zk in zip(sn, shot, t["tf"], zone)],
         "outcome": t["outcome"].to_numpy(), "R": t["R"].to_numpy(),
     })
     keep = ["type", "direction", "first_placed", "end_reason", "risk", "rr", "exit_time", "target_tf", "target_type",

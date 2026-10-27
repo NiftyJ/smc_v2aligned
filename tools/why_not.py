@@ -147,15 +147,15 @@ def mark_text(m):
 
 
 def pois_near(pois, d, t, price, k=3):
-    """The bot's armed POIs (order blocks) the same way, nearest in time to t, with their zones."""
+    """The bot's armed POIs (order blocks / FVGs) the same way, nearest in time to t, with their zones."""
     rows = []
     for t0, t1, info in pois.get(d, []):
         t0, t1 = pd.Timestamp(t0), pd.Timestamp(t1)
         gap = pd.Timedelta(0) if t0 <= t <= t1 else min(abs(t - t0), abs(t - t1))
         rows.append((gap, t0, t1, info))
     rows.sort(key=lambda x: x[0])
-    return [f"{i['tf']} OB {i['poi_bottom']:.2f}-{i['poi_top']:.2f} armed {a:%m-%d %H:%M}->{b:%m-%d %H:%M}"
-            for _, a, b, i in rows[:k]]
+    return [f"{i['tf']} {i.get('poi_type', 'ob').upper()} {i['poi_bottom']:.2f}-{i['poi_top']:.2f} "
+            f"armed {a:%m-%d %H:%M}->{b:%m-%d %H:%M}" for _, a, b, i in rows[:k]]
 
 
 def explain(trade, bot, sn, mo, pois, marks):
@@ -251,7 +251,8 @@ def explain(trade, bot, sn, mo, pois, marks):
         row = f["row"]
         step = "sweep" if cat.endswith("sweep") else "m1_bos"
         mine = marks_t[marks_t["step"] == step] if step == "m1_bos" else marks_t[marks_t["kind"] == "sweep"]
-        vals = (f"bot POI {row.get('poi_tf', '')} {row.get('poi_poi_bottom', np.nan):.2f}-{row.get('poi_poi_top', np.nan):.2f}; "
+        vals = (f"bot POI {row.get('poi_tf', '')} {str(row.get('poi_poi_type', 'ob')).upper()} "
+                f"{row.get('poi_poi_bottom', np.nan):.2f}-{row.get('poi_poi_top', np.nan):.2f}; "
                 f"bot M1 swing low {row.get('swing_low', np.nan):.2f} high {row.get('swing_high', np.nan):.2f}"
                 + (f", break level {row.get('break_level'):.2f}" if pd.notna(row.get("break_level", np.nan)) else "")
                 + f" | yours: {mark_text(mine)} | " + vals)

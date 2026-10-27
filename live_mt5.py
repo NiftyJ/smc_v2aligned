@@ -166,8 +166,9 @@ def send(req):
 def key_of(o):
     """A name for one order that stays the same while the sniper moves it."""
     pre = "F" if o.get("flipped") else ""                # flipped orders never share a tag with normal ones
-    if o["type"] == "sniper":
-        return f"{pre}S|{o['direction']}|{o['tf']}|{o['poi_known']}|{o['shot']}"
+    if o["type"] == "sniper":                            # an FVG POI known with an order block: its own name
+        fvg = "|fvg" if o.get("poi_type") == "fvg" else ""
+        return f"{pre}S|{o['direction']}|{o['tf']}|{o['poi_known']}|{o['shot']}{fvg}"
     return f"{pre}M|{o['direction']}|{o['tf']}|{o['pause_start']}"
 
 
