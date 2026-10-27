@@ -1,0 +1,469 @@
+# The baseline (tag `baseline`) against the final working copy. Only the bot's code files that changed
+# are diffed; new files are listed. Per-change diffs: the commits, one per trading rule.
+#
+#   modified .gitignore
+#   modified live_mt5.py
+#   modified strategy.py
+#   modified tests/test_strategy.py
+#   new      CHANGES.md
+#   new      FINAL_REPORT.md
+#   new      tests/test_tools.py
+#   new      tools/charts.py
+#   new      tools/common.py
+#   new      tools/compare_labels.py
+#   new      tools/explain_extra.py
+#   new      tools/final_check.py
+#   new      tools/round.py
+#   new      tools/run_backtest.py
+#   new      tools/why_not.py
+#
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,3 +2,4 @@
+ *.pyc
+ .pytest_cache/
+ data/
++.venv/
+--- a/live_mt5.py
++++ b/live_mt5.py
+@@ -166,8 +166,9 @@
+ def key_of(o):
+     """A name for one order that stays the same while the sniper moves it."""
+     pre = "F" if o.get("flipped") else ""                # flipped orders never share a tag with normal ones
+-    if o["type"] == "sniper":
+-        return f"{pre}S|{o['direction']}|{o['tf']}|{o['poi_known']}|{o['shot']}"
++    if o["type"] == "sniper":                            # an FVG POI known with an order block: its own name
++        fvg = "|fvg" if o.get("poi_type") == "fvg" else ""
++        return f"{pre}S|{o['direction']}|{o['tf']}|{o['poi_known']}|{o['shot']}{fvg}"
+     return f"{pre}M|{o['direction']}|{o['tf']}|{o['pause_start']}"
+ 
+ 
+--- a/strategy.py
++++ b/strategy.py
+@@ -1,20 +1,23 @@
+ """
+ THE STRATEGY: two intraday trades. Longs are described here; shorts are the mirror image.
+ 
+-Bias first (bias.py): D1 and H4 both up for longs, both down for shorts.
++Trend first (bias.py): D1, H4 and H1 all up for longs, all down for shorts (Settings.TREND_TFS,
++TREND_NEED).
+ 
+ 1. SNIPER ENTRY
+-   * the POI: the bullish order block made by the most recent break of structure on M15, M30
+-     or H1, at the most recent higher low (poi.py). A newer one replaces it. (REQUIRE_STAIRCASE
+-     = True: only order blocks inside a staircase up range.)
+-   * price comes back into that order block (its first touch)
++   * the POI: the most recent bullish fair value gap on M15, M30 or H1 (poi.py) whose gap is at
++     least half an ATR of that timeframe (FVG_MIN_ATR); a newer one replaces it. Its "higher
++     low" below is its bottom. (POI_KINDS = ("ob", "fvg") also arms the
++     bullish order block made by the most recent break of structure, at the most recent higher
++     low. REQUIRE_STAIRCASE = True: only zones inside a staircase up range.)
++   * price comes back into that zone (its first touch)
+    * then on M1: a range forms there; its low is swept (a candle trades below the last M1 swing
+      low), then a candle closes above the real M1 swing high: the highest high between the sweep and
+      the lowest point after it, or the last swing high if higher (no new low for 30 candles = reset)
+-   * the order: a buy limit at the OPEN of the order block of that move, stop just under the low
+-     of the range (the sweep's low)
++   * the order: a buy limit at the HIGH (top) of the order block of that move, stop just under
++     the low of the range (the sweep's low)
+    * not filled, and price builds the next range (e.g. a pause up)? Each new M1 break up inside
+-     it moves the order to the open of the new order block, stop under that range's low
++     it moves the order to the high of the new order block, stop under that range's low
+    * cancelled on a close below the stop's range or below the higher low, or 1 day after the touch
+    * stopped out? Another try (up to 3 per POI) once an M1 candle closes above the real swing high
+      again (the failed try's high, or the highest high before the next low): the same order rules
+@@ -53,8 +56,14 @@
+ 
+ @dataclass
+ class Settings:
+-    STAIR_TFS: tuple = ("15min", "30min", "1h")   # the sniper's POI: an order block on these timeframes
+-    REQUIRE_STAIRCASE: bool = False         # True = only order blocks inside a staircase range
++    STAIR_TFS: tuple = ("15min", "30min", "1h")   # the sniper's POI: a zone (POI_KINDS) on these timeframes
++    REQUIRE_STAIRCASE: bool = False         # True = only zones inside a staircase range
++    POI_KINDS: tuple = ("fvg",)             # the sniper's POI zones on STAIR_TFS: fair value gaps (your marks: 36 of 44
++                                            # M15+ zones are FVGs); ("ob", "fvg") = order blocks too
++    FVG_MIN_ATR: float = 0.5                # an FVG is a POI only if its gap is at least this many ATRs (14) of its own
++                                            # timeframe: every FVG you marked is >= 0.45 (median 1.04); half of all are < 0.27
++    TREND_TFS: tuple = ("d1", "h4", "h1")   # the trend (bias.py) on these timeframes ...
++    TREND_NEED: int = 3                     # ... at least this many pointing the trade's way (more than half)
+     PAUSE_TFS: tuple = ("5min",)            # where the momentum order looks for a pause (5 min ranges)
+     SNIPER_MIN_R: float = 12.0              # sniper take-profit: at least 12R
+     MOMENTUM_R: float = 10.0                # momentum take-profit: 10R
+@@ -92,6 +101,14 @@
+     return out
+ 
+ 
++def trend_of(bias, s):
++    """The direction trades may take on each candle: +1 / -1 when at least s.TREND_NEED of the trends on
++    s.TREND_TFS (bias.py, closed candles) point that way, else 0."""
++    votes = np.array([bias[f"bias_{k}"].to_numpy() for k in s.TREND_TFS])
++    up, down = (votes == 1).sum(axis=0), (votes == -1).sum(axis=0)
++    return np.where(up >= s.TREND_NEED, 1, np.where(down >= s.TREND_NEED, -1, 0))
++
++
+ def last_closed(index, tf, times):
+     """For each time: position of the last tf candle (indexed by start) closed by then, -1 if none."""
+     ends = (index + pd.Timedelta(tf)).to_numpy()
+@@ -143,6 +160,7 @@
+         self.sw = SwingTracker(s.SWING_N)
+         self.st = StructureTracker(self.sw)
+         self.state = "IDLE"
++        self.why = ""                                           # read-only: what the last step decided (why_not trace)
+ 
+     def step(self, t, armed):
+         o, h, l, c, s = self.o, self.h, self.l, self.c, self.s
+@@ -150,6 +168,7 @@
+         events = self.events = self.st.update(t, c)
+         if not armed:
+             self.state = "IDLE"
++            self.why = "disarmed"
+             return None
+         if self.state == "IDLE":
+             sl = self.sw.last_low
+@@ -157,6 +176,10 @@
+                 sl.swept_at = t
+                 self.state, self.sweep_bar, self.swept, self.swept_bar = "SWEPT", t, sl.price, sl.idx
+                 self.ext, self.ext_bar = l[t], t
++                self.why = "sweep"
++            else:
++                self.why = "no swing low yet" if sl is None else "swing low already swept" if sl.swept_at >= 0 \
++                    else "waiting for a sweep"
+             return None
+         if l[t] < self.ext:
+             self.ext, self.ext_bar = l[t], t
+@@ -167,6 +190,7 @@
+         sh = self.sw.last_high
+         if sh is not None and sh.price > level:
+             level, level_bar = sh.price, sh.idx
++        self.level = level
+         if t > self.ext_bar and c[t] > level:
+             self.state = "IDLE"
+             a = self.a[t]
+@@ -174,12 +198,16 @@
+             entry = min(ob_top, c[t])
+             stop = self.ext - s.STOP_BUFFER_ATR * a
+             if not np.isfinite(a) or a <= 0 or entry - stop < s.MIN_RISK_ATR * a:
++                self.why = "break, but the stop is too tight (MIN_RISK_ATR)"
+                 return None
++            self.why = "break: order"
+             return dict(entry=entry, stop=stop, sweep_bar=self.sweep_bar, swept=self.swept, ob_bar=ob_bar,
+                         swept_bar=self.swept_bar, ext_bar=self.ext_bar, broken_bar=level_bar,
+                         broken=level, kind="BOS")
++        self.why = "swept, waiting for the break"
+         if t - self.ext_bar >= s.MAX_BARS_SWEEP_TO_SHIFT:       # 30 candles without a new low or a break
+             self.state = "IDLE"
++            self.why = "swept, no break within MAX_BARS_SWEEP_TO_SHIFT: reset"
+         return None
+ 
+ 
+@@ -207,7 +235,11 @@
+     return row
+ 
+ 
+-def _sniper(df, s, bias, z, base, live=None):
++def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
++    """journal (list, optional): every order's end is appended (filled, cancelled + why, or still waiting at
++    the last candle), so orders that never fill can be listed too. trace (dict with "bars": a set of candle
++    positions, "out": a list, optional): what each rule decided on those candles (tools/why_not.py).
++    Both only record; the trades are the same with or without them."""
+     o, h, l, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+     n, times = len(df), df.index.to_numpy()
+     closes_t = times + base.to_timedelta64()
+@@ -218,7 +250,15 @@
+         st = shapes(df, tf)
+         zt = pois(df, tfs=(tf,), swing_n=s.SWING_N)
+         for d in (1, -1):
+-            obs = zt[zt["type"] == ("bull_ob" if d == 1 else "bear_ob")].reset_index(drop=True)
++            side = "bull" if d == 1 else "bear"
++            obs = zt[zt["type"].isin([f"{side}_{k}" for k in s.POI_KINDS])].reset_index(drop=True)
++            if s.FVG_MIN_ATR > 0:                       # a real imbalance: a gap at least FVG_MIN_ATR ATRs tall
++                bars = resample(df, tf)
++                a_tf = atr(*(bars[k].to_numpy(float) for k in ("high", "low", "close")), s.ATR_N)
++                pos = np.clip(bars.index.searchsorted(obs["formed"]), 0, len(bars) - 1)
++                small = (obs["type"] == f"{side}_fvg").to_numpy() & \
++                    ((obs["top"] - obs["bottom"]).to_numpy() < s.FVG_MIN_ATR * a_tf[pos])
++                obs = obs[~small].reset_index(drop=True)
+             kb = st.index.searchsorted(obs["known"] - pd.Timedelta(tf))        # the break-of-structure candle
+             kb_ok = (kb < len(st)) & (st.index[np.minimum(kb, len(st) - 1)] == obs["known"] - pd.Timedelta(tf))
+             kb = np.minimum(kb, len(st) - 1)
+@@ -230,8 +270,18 @@
+             if obs.empty:
+                 continue
+             known_bar = np.searchsorted(times, obs["known"].to_numpy(), side="left")
+-            replaced = np.r_[known_bar[1:], n]                                  # a newer one replaces it
+-            used = obs["used"].to_numpy()
++            kind = obs["type"].to_numpy()
++            replaced = np.full(len(obs), n)
++            for k in set(kind):                                                 # a newer one (of its kind) replaces it
++                same = np.flatnonzero(kind == k)
++                replaced[same] = np.r_[known_bar[same][1:], n]
++            used = obs["used"].to_numpy().copy()
++            fvg = kind == f"{side}_fvg"
++            if fvg.any():                       # an FVG: touched on the first trade into its near edge (pois(): filled)
++                j = _first_at_or_below(l if d == 1 else -h, known_bar[fvg],
++                                       obs["top"].to_numpy(float)[fvg] if d == 1 else -obs["bottom"].to_numpy(float)[fvg])
++                used[fvg] = np.where(j < n, closes_t[np.minimum(j, n - 1)], np.datetime64("NaT", "ns"))
++                obs.loc[fvg, "origin"] = obs.loc[fvg, "bottom" if d == 1 else "top"]   # its HL: the far edge
+             touch = np.where(pd.isna(used), n, np.searchsorted(closes_t, np.where(pd.isna(used), closes_t[0], used)))
+             gone = first_beyond(c, np.minimum(touch, n - 1), obs["origin"].to_numpy(), d)   # close beyond the HL
+             gone = np.where(touch < n, gone, n)
+@@ -240,9 +290,13 @@
+                     continue
+                 end = min(replaced[i], gone[i], touch[i] + window, n)
+                 if end > touch[i]:
+-                    pois_by_dir[d].append((touch[i], end, dict(tf=tf, poi_top=obs["top"][i], poi_bottom=obs["bottom"][i],
++                    pois_by_dir[d].append((touch[i], end, dict(tf=tf, poi_type=kind[i].split("_")[1],
++                                                               poi_top=obs["top"][i], poi_bottom=obs["bottom"][i],
+                                                                hl=obs["origin"][i], poi_formed=obs["formed"][i],
+                                                                poi_known=obs["known"][i], poi_touch=used[i])))
++    if trace is not None:                               # the POIs and when each one arms the M1 entry
++        trace["pois"] = {d: [(times[t0], times[min(t1, n - 1)], info) for t0, t1, info in pois_by_dir[d]]
++                         for d in (1, -1)}
+     owner = {}
+     for d in (1, -1):                                   # which POI arms each M1 candle (the latest touched)
+         own = np.full(n, -1)
+@@ -251,20 +305,35 @@
+         owner[d] = own
+     flipped = {d: mirror(o, h, l, c, d) for d in (1, -1)}
+     machines = {d: SweepMachine(*flipped[d], a, s) for d in (1, -1)}
+-    b1, b4 = bias["bias_d1"].to_numpy(), bias["bias_h4"].to_numpy()
++    b1, b4, b_1h = (bias[f"bias_{k}"].to_numpy() for k in ("d1", "h4", "h1"))
++    trend = trend_of(bias, s)
+     pending = {1: None, -1: None}                       # the order waiting to be filled, per direction
+     last_owner = {1: -1, -1: -1}
+     rearm = {1: None, -1: None}                         # after a stop-out: waiting for a new M1 break up
+     rows = []
++    owner0 = {d: owner[d].copy() for d in (1, -1)} if trace is not None else None   # before "one setup per touch"
+ 
+     def place(d, t, ob_bar, range_low, order, base_row):
+-        """A limit at the OPEN of the order block, stop just beyond the range's low
++        """A limit at the HIGH (top) of the order block, stop just beyond the range's low
+         (all in the flipped chart, where every trade is a long)."""
+         O, H, L, C = flipped[d]
+-        entry, stop = O[ob_bar], range_low - s.STOP_BUFFER_ATR * a[t]
++        entry, stop = H[ob_bar], range_low - s.STOP_BUFFER_ATR * a[t]
+         if not (np.isfinite(a[t]) and entry - stop >= s.MIN_RISK_ATR * a[t] and entry < C[t]):
+             return base_row if order > 1 else None      # a bad successive order keeps the one before
+-        return dict(base_row or {}, entry_f=entry, stop_f=stop, placed_bar=t, ob_bar=ob_bar, order=order)
++        return dict(base_row or {}, entry_f=entry, stop_f=stop, placed_bar=t, ob_bar=ob_bar, order=order,
++                    first_bar=(base_row or {}).get("first_bar", t))
++
++    def ended(event, d, q, t, why=""):
++        """journal: one order's end (only recorded, nothing decided here)."""
++        entry, stop = d * q["entry_f"], d * q["stop_f"]
++        when = pd.Timestamp(closes_t[q["placed_bar"]])
++        tg = _target(z, when, entry, stop, d, s.SNIPER_MIN_R)
++        journal.append(dict(q["info"], event=event, why=why, type="sniper", direction=d, placed=when,
++                            first_placed=pd.Timestamp(closes_t[q["first_bar"]]), entry=entry, stop=stop,
++                            target=tg["level"], target_tf=tg["tf"], target_type=tg["type"], risk=abs(entry - stop),
++                            order="first range" if q["order"] == 1 else f"next range ({q['order']})",
++                            shot=q["shot"], m1_ob_time=pd.Timestamp(times[q["ob_bar"]]),
++                            ended=pd.Timestamp(closes_t[min(t, n - 1)])))
+ 
+     for t in range(n):
+         for d in (1, -1):
+@@ -275,7 +344,22 @@
+                 m.state, last_owner[d] = "IDLE", p
+             q = pending[d]
+             cand = m.step(t, p >= 0 and q is None)
++            rec = None
++            if trace is not None and t in trace["bars"]:
++                sl, sh = m.sw.last_low, m.sw.last_high
++                rec = dict(t=t, direction=d, bias_d1=int(b1[t]), bias_h4=int(b4[t]), bias_h1=int(b_1h[t]),
++                           trend=int(trend[t]), poi=int(p),
++                           poi_before_use=int(owner0[d][t]), machine=m.why, machine_state=m.state,
++                           swing_low=d * sl.price if sl is not None else np.nan,
++                           swing_high=d * sh.price if sh is not None else np.nan,
++                           break_level=d * getattr(m, "level", np.nan) if m.why.startswith("swept") else np.nan,
++                           pending=q is not None, rearm=rearm[d] is not None, cand=cand is not None, stage="")
++                if p >= 0:
++                    rec.update({f"poi_{k}": v for k, v in pois_by_dir[d][p][2].items()})
++                trace["out"].append(rec)
+             if q is not None:                           # ---- an order is waiting
++                if rec is not None:
++                    rec["stage"] = "an order is already waiting (sweep detection off)"
+                 if t > q["placed_bar"] and L[t] <= q["entry_f"]:          # filled
+                     pending[d] = None
+                     entry, stop = d * q["entry_f"], d * q["stop_f"]
+@@ -289,6 +373,9 @@
+                                shot=q["shot"], filled=pd.Timestamp(times[t]))
+                     row = _finish(row, l, h, c, times, base, t, d, t + 1, s.COST)
+                     rows.append(row)
++                    if journal is not None:
++                        journal.append(dict(event="filled", direction=d, placed=when, filled=row["filled"],
++                                            first_placed=pd.Timestamp(closes_t[q["first_bar"]])))
+                     if row["outcome"] == "stop" and q["shot"] < s.SNIPER_MAX_SHOTS:   # stopped: another try later
+                         j = int(np.searchsorted(closes_t, row["exit_time"].to_datetime64()))
+                         rearm[d] = dict(start=j + 1, info=q["info"], expires=q["expires"], shot=q["shot"] + 1,
+@@ -297,6 +384,9 @@
+                 hl = d * q["info"]["hl"]
+                 if C[t] < q["stop_f"] or C[t] < hl or t >= q["expires"]:   # range or higher low broken, or too late
+                     pending[d] = None
++                    if journal is not None:
++                        ended("cancelled", d, q, t, "close beyond the stop's range" if C[t] < q["stop_f"] else
++                              "close beyond the higher low" if C[t] < hl else "expired (1 day after the touch)")
+                     continue
+                 for e in m.events:                      # a new break up: the successive order block
+                     if e[0] == 1:
+@@ -315,20 +405,27 @@
+                     if r_["ext_bar"] < 0 or L[t] < L[r_["ext_bar"]]:
+                         r_["ext_bar"] = t                       # the lowest point since the stop-out
+                     level = H[r_["from_bar"]:r_["ext_bar"] + 1].max()   # the failed try's high, or higher
+-                    if t > r_["ext_bar"] and C[t] > level and b1[t] == d and b4[t] == d:
++                    if t > r_["ext_bar"] and C[t] > level and trend[t] == d:
+                         leg = r_["ext_bar"]
+                         q = place(d, t, find_order_block(O, H, L, C, leg)[0], L[leg], 1, None)
+                         if q is not None:
+                             q.update(info=r_["info"], expires=r_["expires"], shot=r_["shot"])
+                             pending[d], rearm[d] = q, None
++                            if rec is not None:
++                                rec["stage"] = "re-entry order placed (after a stop-out)"
+                     if pending[d] is not None:
+                         continue
+             if cand is None:
++                if rec is not None and not rec["stage"]:
++                    rec["stage"] = ("no POI armed" + (" (this POI already had its setup)" if rec["poi_before_use"] >= 0
++                                                      else "") if p < 0 else m.why)
+                 continue
+             t1 = pois_by_dir[d][p][1]
+             seg = owner[d][t + 1:t1]
+             seg[seg == p] = -1                          # one setup per touch
+-            if b1[t] != d or b4[t] != d:
++            if trend[t] != d:
++                if rec is not None:
++                    rec["stage"] = "sweep + break, but the trend disagrees (the POI is used up)"
+                 continue
+             info = dict(pois_by_dir[d][p][2], sweep_time=pd.Timestamp(times[cand["sweep_bar"]]),
+                         swept=d * cand["swept"], broken=d * cand["broken"],
+@@ -337,6 +434,13 @@
+             if q is not None:
+                 q.update(info=info, expires=min(pois_by_dir[d][p][0] + window, n), shot=1)
+                 pending[d] = q
++            if rec is not None:
++                rec["stage"] = "order placed" if q is not None else \
++                    "sweep + break, but the order block is too close (MIN_RISK_ATR) or above the close"
++    if journal is not None:                             # orders still waiting at the last candle
++        for d, q in pending.items():
++            if q is not None:
++                ended("waiting at the end of the data", d, q, n)
+     if live is not None:                                # orders still waiting at the last candle
+         for d, q in pending.items():
+             if q is None:
+@@ -350,7 +454,9 @@
+     return rows
+ 
+ 
+-def _momentum(df, s, bias, z, base, live=None):
++def _momentum(df, s, bias, z, base, live=None, trace=None):
++    """trace (dict with "m5": a set of M5 candle positions, "out": a list, optional): what each rule decided
++    on those candles (tools/why_not.py). Only records; the trades are the same with or without it."""
+     m5 = resample(df, "5min")
+     o5, h5, l5, c5 = (m5[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+     a5 = atr(h5, l5, c5, s.ATR_N)
+@@ -358,7 +464,8 @@
+     times = df.index.to_numpy()
+     closes_t = times + base.to_timedelta64()
+     l, h, c = (df[k].to_numpy(float) for k in ("low", "high", "close"))
+-    b1, b4 = bias["bias_d1"].to_numpy(), bias["bias_h4"].to_numpy()
++    b1, b4, b_1h = (bias[f"bias_{k}"].to_numpy() for k in ("d1", "h4", "h1"))
++    trend = trend_of(bias, s)
+     tables = {}
+     for tf in s.PAUSE_TFS:
+         P = shapes(df, tf)
+@@ -371,14 +478,37 @@
+         done = set()
+         for m in range(len(m5)):
+             sw.update(m, H, L)
+-            if not any(e[0] == 1 for e in st.update(m, C)):
++            up = any(e[0] == 1 for e in st.update(m, C))
++            rec = None
++            if trace is not None and m in trace["m5"]:
++                rec = dict(m5_bar=m, direction=d, time=pd.Timestamp(m5_close[m]), m5_bos=up,
++                           m5_swing_high=d * sw.last_high.price if sw.last_high is not None else np.nan, stage="")
++                for tf, (P, kpos, since) in tables.items():
++                    k = kpos[m]
++                    if k >= 0:
++                        rec.update(pause_on=int(P["pause"].iat[k] == 1 and P["pause_dir"].iat[k] == d),
++                                   pause_top=P["pause_top"].iat[k], pause_bottom=P["pause_bottom"].iat[k],
++                                   pause_used=(tf, since[k]) in done)
++                trace["out"].append(rec)
++            if not up:
++                if rec is not None:
++                    rec["stage"] = "no M5 break of structure"
+                 continue
+             j = int(np.searchsorted(closes_t, m5_close[m]))   # the base candle closing with this M5 candle
+-            if j >= len(df) or closes_t[j] != m5_close[m] or b1[j] != d or b4[j] != d:
++            if rec is not None and j < len(df):
++                rec.update(bias_d1=int(b1[j]), bias_h4=int(b4[j]), bias_h1=int(b_1h[j]), trend=int(trend[j]))
++            if j >= len(df) or closes_t[j] != m5_close[m] or trend[j] != d:
++                if rec is not None:
++                    rec["stage"] = "M5 break, but the trend disagrees" if j < len(df) and closes_t[j] == m5_close[m] \
++                        else "M5 break, but no M1 candle closes with it"
+                 continue
+             for tf, (P, kpos, since) in tables.items():
+                 k = kpos[m]                                    # last pause candle closed before this M5 candle
+                 if k < 0 or P["pause"].iat[k] != 1 or P["pause_dir"].iat[k] != d or (tf, since[k]) in done:
++                    if rec is not None and not rec["stage"]:
++                        rec["stage"] = "M5 break, but this pause was already traded" if k >= 0 and \
++                            P["pause"].iat[k] == 1 and P["pause_dir"].iat[k] == d else \
++                            f"M5 break, but no {tf} pause range in this direction"
+                     continue
+                 done.add((tf, since[k]))
+                 after = np.searchsorted(m5.index, P.index[k] + pd.Timedelta(tf))   # M5 candles since that close
+@@ -392,7 +522,11 @@
+                 entry = trigger - s.MOMENTUM_LIMIT * (trigger - stop)   # ... a limit halfway back to the stop
+                 risk = d * (entry - stop)
+                 if not risk > 0:
++                    if rec is not None:
++                        rec["stage"] = "M5 break in a pause, but no room for a stop"
+                     continue
++                if rec is not None:
++                    rec["stage"] = "order placed"
+                 when = pd.Timestamp(m5_close[m])
+                 target = entry + d * s.MOMENTUM_R * risk
+                 last = min(j + int(pd.Timedelta(s.MOMENTUM_WAIT) / base), len(df) - 1)
+@@ -417,19 +551,20 @@
+     return rows
+ 
+ 
+-def backtest(df, settings=None):
+-    """Every trade both rules would have taken on df (M1 bars), one row each."""
++def backtest(df, settings=None, journal=None, trace=None):
++    """Every trade both rules would have taken on df (M1 bars), one row each.
++    journal / trace: optional records for tools/ (see _sniper, _momentum); they change nothing."""
+     s = settings or Settings()
+     base = bar_length(df.index)
+     bias = htf_bias(df)
+     z = pois(df)                                      # H1 / H4 / D1: the targets
+     rows = []
+     if base <= pd.Timedelta("1min"):
+-        rows += _sniper(df, s, bias, z, base)
++        rows += _sniper(df, s, bias, z, base, journal=journal, trace=(trace or {}).get("sniper"))
+     else:
+         print(f"note: the sniper entry needs M1 bars (these are {base}); only momentum orders are tested")
+     if base <= pd.Timedelta("5min"):
+-        rows += _momentum(df, s, bias, z, base)
++        rows += _momentum(df, s, bias, z, base, trace=(trace or {}).get("momentum"))
+     trades = pd.DataFrame(rows)
+     if trades.empty:
+         return trades
+--- a/tests/test_strategy.py
++++ b/tests/test_strategy.py
+@@ -58,7 +58,7 @@
+     for r in TR.itertuples():
+         d = r.direction
+         j = DF.index.get_loc(r.placed - BASE)                       # the candle closing at the decision
+-        assert bias["bias_d1"].iat[j] == d and bias["bias_h4"].iat[j] == d
++        assert bias["bias_d1"].iat[j] == d and bias["bias_h4"].iat[j] == d and bias["bias_h1"].iat[j] == d
+         assert d * (r.entry - r.stop) > 0 and d * (r.target - r.entry) > 0
+         if r.type == "momentum":
+             assert np.isclose(r.rr, 10)                             # momentum: 10R
+@@ -92,7 +92,7 @@
+             assert (r.stop < r.pause_bottom) if d == 1 else (r.stop > r.pause_top)  # beyond the whole range
+     sn = TR[TR["type"] == "sniper"]
+     assert (sn["shot"] > 1).any()                                   # re-entries happen in this sample
+-    for _, g in sn.groupby("poi_touch"):                            # per POI: at most 3 tries, each after a stop
++    for _, g in sn.groupby(["direction", "tf", "poi_type", "poi_formed"]):   # per POI: at most 3 tries, each after a stop
+         assert len(g) <= 3 and list(g["shot"]) == list(range(1, len(g) + 1))
+         assert (g["outcome"].iloc[:-1] == "stop").all()
+         assert (g["placed"].iloc[1:].to_numpy() > g["exit_time"].iloc[:-1].to_numpy()).all()
