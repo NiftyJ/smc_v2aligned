@@ -143,6 +143,7 @@ class SweepMachine:
         self.sw = SwingTracker(s.SWING_N)
         self.st = StructureTracker(self.sw)
         self.state = "IDLE"
+        self.why = ""                                           # read-only: what the last step decided (why_not trace)
 
     def step(self, t, armed):
         o, h, l, c, s = self.o, self.h, self.l, self.c, self.s
@@ -150,6 +151,7 @@ class SweepMachine:
         events = self.events = self.st.update(t, c)
         if not armed:
             self.state = "IDLE"
+            self.why = "disarmed"
             return None
         if self.state == "IDLE":
             sl = self.sw.last_low
@@ -157,6 +159,10 @@ class SweepMachine:
                 sl.swept_at = t
                 self.state, self.sweep_bar, self.swept, self.swept_bar = "SWEPT", t, sl.price, sl.idx
                 self.ext, self.ext_bar = l[t], t
+                self.why = "sweep"
+            else:
+                self.why = "no swing low yet" if sl is None else "swing low already swept" if sl.swept_at >= 0 \
+                    else "waiting for a sweep"
             return None
         if l[t] < self.ext:
             self.ext, self.ext_bar = l[t], t
@@ -167,6 +173,7 @@ class SweepMachine:
         sh = self.sw.last_high
         if sh is not None and sh.price > level:
             level, level_bar = sh.price, sh.idx
+        self.level = level
         if t > self.ext_bar and c[t] > level:
             self.state = "IDLE"
             a = self.a[t]
@@ -174,12 +181,16 @@ class SweepMachine:
             entry = min(ob_top, c[t])
             stop = self.ext - s.STOP_BUFFER_ATR * a
             if not np.isfinite(a) or a <= 0 or entry - stop < s.MIN_RISK_ATR * a:
+                self.why = "break, but the stop is too tight (MIN_RISK_ATR)"
                 return None
+            self.why = "break: order"
             return dict(entry=entry, stop=stop, sweep_bar=self.sweep_bar, swept=self.swept, ob_bar=ob_bar,
                         swept_bar=self.swept_bar, ext_bar=self.ext_bar, broken_bar=level_bar,
                         broken=level, kind="BOS")
+        self.why = "swept, waiting for the break"
         if t - self.ext_bar >= s.MAX_BARS_SWEEP_TO_SHIFT:       # 30 candles without a new low or a break
             self.state = "IDLE"
+            self.why = "swept, no break within MAX_BARS_SWEEP_TO_SHIFT: reset"
         return None
 
 
@@ -207,7 +218,11 @@ def _finish(row, lo, hi, closes, times, base, start, d, target_from, cost):
     return row
 
 
-def _sniper(df, s, bias, z, base, live=None):
+def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
+    """journal (list, optional): every order's end is appended (filled, cancelled + why, or still waiting at
+    the last candle), so orders that never fill can be listed too. trace (dict with "bars": a set of candle
+    positions, "out": a list, optional): what each rule decided on those candles (tools/why_not.py).
+    Both only record; the trades are the same with or without them."""
     o, h, l, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
     n, times = len(df), df.index.to_numpy()
     closes_t = times + base.to_timedelta64()
@@ -243,6 +258,9 @@ def _sniper(df, s, bias, z, base, live=None):
                     pois_by_dir[d].append((touch[i], end, dict(tf=tf, poi_top=obs["top"][i], poi_bottom=obs["bottom"][i],
                                                                hl=obs["origin"][i], poi_formed=obs["formed"][i],
                                                                poi_known=obs["known"][i], poi_touch=used[i])))
+    if trace is not None:                               # the POIs and when each one arms the M1 entry
+        trace["pois"] = {d: [(times[t0], times[min(t1, n - 1)], info) for t0, t1, info in pois_by_dir[d]]
+                         for d in (1, -1)}
     owner = {}
     for d in (1, -1):                                   # which POI arms each M1 candle (the latest touched)
         own = np.full(n, -1)
@@ -256,6 +274,7 @@ def _sniper(df, s, bias, z, base, live=None):
     last_owner = {1: -1, -1: -1}
     rearm = {1: None, -1: None}                         # after a stop-out: waiting for a new M1 break up
     rows = []
+    owner0 = {d: owner[d].copy() for d in (1, -1)} if trace is not None else None   # before "one setup per touch"
 
     def place(d, t, ob_bar, range_low, order, base_row):
         """A limit at the OPEN of the order block, stop just beyond the range's low
@@ -264,7 +283,20 @@ def _sniper(df, s, bias, z, base, live=None):
         entry, stop = O[ob_bar], range_low - s.STOP_BUFFER_ATR * a[t]
         if not (np.isfinite(a[t]) and entry - stop >= s.MIN_RISK_ATR * a[t] and entry < C[t]):
             return base_row if order > 1 else None      # a bad successive order keeps the one before
-        return dict(base_row or {}, entry_f=entry, stop_f=stop, placed_bar=t, ob_bar=ob_bar, order=order)
+        return dict(base_row or {}, entry_f=entry, stop_f=stop, placed_bar=t, ob_bar=ob_bar, order=order,
+                    first_bar=(base_row or {}).get("first_bar", t))
+
+    def ended(event, d, q, t, why=""):
+        """journal: one order's end (only recorded, nothing decided here)."""
+        entry, stop = d * q["entry_f"], d * q["stop_f"]
+        when = pd.Timestamp(closes_t[q["placed_bar"]])
+        tg = _target(z, when, entry, stop, d, s.SNIPER_MIN_R)
+        journal.append(dict(q["info"], event=event, why=why, type="sniper", direction=d, placed=when,
+                            first_placed=pd.Timestamp(closes_t[q["first_bar"]]), entry=entry, stop=stop,
+                            target=tg["level"], target_tf=tg["tf"], target_type=tg["type"], risk=abs(entry - stop),
+                            order="first range" if q["order"] == 1 else f"next range ({q['order']})",
+                            shot=q["shot"], m1_ob_time=pd.Timestamp(times[q["ob_bar"]]),
+                            ended=pd.Timestamp(closes_t[min(t, n - 1)])))
 
     for t in range(n):
         for d in (1, -1):
@@ -275,7 +307,21 @@ def _sniper(df, s, bias, z, base, live=None):
                 m.state, last_owner[d] = "IDLE", p
             q = pending[d]
             cand = m.step(t, p >= 0 and q is None)
+            rec = None
+            if trace is not None and t in trace["bars"]:
+                sl, sh = m.sw.last_low, m.sw.last_high
+                rec = dict(t=t, direction=d, bias_d1=int(b1[t]), bias_h4=int(b4[t]), poi=int(p),
+                           poi_before_use=int(owner0[d][t]), machine=m.why, machine_state=m.state,
+                           swing_low=d * sl.price if sl is not None else np.nan,
+                           swing_high=d * sh.price if sh is not None else np.nan,
+                           break_level=d * getattr(m, "level", np.nan) if m.why.startswith("swept") else np.nan,
+                           pending=q is not None, rearm=rearm[d] is not None, cand=cand is not None, stage="")
+                if p >= 0:
+                    rec.update({f"poi_{k}": v for k, v in pois_by_dir[d][p][2].items()})
+                trace["out"].append(rec)
             if q is not None:                           # ---- an order is waiting
+                if rec is not None:
+                    rec["stage"] = "an order is already waiting (sweep detection off)"
                 if t > q["placed_bar"] and L[t] <= q["entry_f"]:          # filled
                     pending[d] = None
                     entry, stop = d * q["entry_f"], d * q["stop_f"]
@@ -289,6 +335,9 @@ def _sniper(df, s, bias, z, base, live=None):
                                shot=q["shot"], filled=pd.Timestamp(times[t]))
                     row = _finish(row, l, h, c, times, base, t, d, t + 1, s.COST)
                     rows.append(row)
+                    if journal is not None:
+                        journal.append(dict(event="filled", direction=d, placed=when, filled=row["filled"],
+                                            first_placed=pd.Timestamp(closes_t[q["first_bar"]])))
                     if row["outcome"] == "stop" and q["shot"] < s.SNIPER_MAX_SHOTS:   # stopped: another try later
                         j = int(np.searchsorted(closes_t, row["exit_time"].to_datetime64()))
                         rearm[d] = dict(start=j + 1, info=q["info"], expires=q["expires"], shot=q["shot"] + 1,
@@ -297,6 +346,9 @@ def _sniper(df, s, bias, z, base, live=None):
                 hl = d * q["info"]["hl"]
                 if C[t] < q["stop_f"] or C[t] < hl or t >= q["expires"]:   # range or higher low broken, or too late
                     pending[d] = None
+                    if journal is not None:
+                        ended("cancelled", d, q, t, "close beyond the stop's range" if C[t] < q["stop_f"] else
+                              "close beyond the higher low" if C[t] < hl else "expired (1 day after the touch)")
                     continue
                 for e in m.events:                      # a new break up: the successive order block
                     if e[0] == 1:
@@ -321,14 +373,21 @@ def _sniper(df, s, bias, z, base, live=None):
                         if q is not None:
                             q.update(info=r_["info"], expires=r_["expires"], shot=r_["shot"])
                             pending[d], rearm[d] = q, None
+                            if rec is not None:
+                                rec["stage"] = "re-entry order placed (after a stop-out)"
                     if pending[d] is not None:
                         continue
             if cand is None:
+                if rec is not None and not rec["stage"]:
+                    rec["stage"] = ("no POI armed" + (" (this POI already had its setup)" if rec["poi_before_use"] >= 0
+                                                      else "") if p < 0 else m.why)
                 continue
             t1 = pois_by_dir[d][p][1]
             seg = owner[d][t + 1:t1]
             seg[seg == p] = -1                          # one setup per touch
             if b1[t] != d or b4[t] != d:
+                if rec is not None:
+                    rec["stage"] = "sweep + break, but D1 / H4 bias disagree (the POI is used up)"
                 continue
             info = dict(pois_by_dir[d][p][2], sweep_time=pd.Timestamp(times[cand["sweep_bar"]]),
                         swept=d * cand["swept"], broken=d * cand["broken"],
@@ -337,6 +396,13 @@ def _sniper(df, s, bias, z, base, live=None):
             if q is not None:
                 q.update(info=info, expires=min(pois_by_dir[d][p][0] + window, n), shot=1)
                 pending[d] = q
+            if rec is not None:
+                rec["stage"] = "order placed" if q is not None else \
+                    "sweep + break, but the order block is too close (MIN_RISK_ATR) or above the close"
+    if journal is not None:                             # orders still waiting at the last candle
+        for d, q in pending.items():
+            if q is not None:
+                ended("waiting at the end of the data", d, q, n)
     if live is not None:                                # orders still waiting at the last candle
         for d, q in pending.items():
             if q is None:
@@ -350,7 +416,9 @@ def _sniper(df, s, bias, z, base, live=None):
     return rows
 
 
-def _momentum(df, s, bias, z, base, live=None):
+def _momentum(df, s, bias, z, base, live=None, trace=None):
+    """trace (dict with "m5": a set of M5 candle positions, "out": a list, optional): what each rule decided
+    on those candles (tools/why_not.py). Only records; the trades are the same with or without it."""
     m5 = resample(df, "5min")
     o5, h5, l5, c5 = (m5[k].to_numpy(float) for k in ("open", "high", "low", "close"))
     a5 = atr(h5, l5, c5, s.ATR_N)
@@ -371,14 +439,37 @@ def _momentum(df, s, bias, z, base, live=None):
         done = set()
         for m in range(len(m5)):
             sw.update(m, H, L)
-            if not any(e[0] == 1 for e in st.update(m, C)):
+            up = any(e[0] == 1 for e in st.update(m, C))
+            rec = None
+            if trace is not None and m in trace["m5"]:
+                rec = dict(m5_bar=m, direction=d, time=pd.Timestamp(m5_close[m]), m5_bos=up,
+                           m5_swing_high=d * sw.last_high.price if sw.last_high is not None else np.nan, stage="")
+                for tf, (P, kpos, since) in tables.items():
+                    k = kpos[m]
+                    if k >= 0:
+                        rec.update(pause_on=int(P["pause"].iat[k] == 1 and P["pause_dir"].iat[k] == d),
+                                   pause_top=P["pause_top"].iat[k], pause_bottom=P["pause_bottom"].iat[k],
+                                   pause_used=(tf, since[k]) in done)
+                trace["out"].append(rec)
+            if not up:
+                if rec is not None:
+                    rec["stage"] = "no M5 break of structure"
                 continue
             j = int(np.searchsorted(closes_t, m5_close[m]))   # the base candle closing with this M5 candle
+            if rec is not None and j < len(df):
+                rec.update(bias_d1=int(b1[j]), bias_h4=int(b4[j]))
             if j >= len(df) or closes_t[j] != m5_close[m] or b1[j] != d or b4[j] != d:
+                if rec is not None:
+                    rec["stage"] = "M5 break, but D1 / H4 bias disagree" if j < len(df) and closes_t[j] == m5_close[m] \
+                        else "M5 break, but no M1 candle closes with it"
                 continue
             for tf, (P, kpos, since) in tables.items():
                 k = kpos[m]                                    # last pause candle closed before this M5 candle
                 if k < 0 or P["pause"].iat[k] != 1 or P["pause_dir"].iat[k] != d or (tf, since[k]) in done:
+                    if rec is not None and not rec["stage"]:
+                        rec["stage"] = "M5 break, but this pause was already traded" if k >= 0 and \
+                            P["pause"].iat[k] == 1 and P["pause_dir"].iat[k] == d else \
+                            f"M5 break, but no {tf} pause range in this direction"
                     continue
                 done.add((tf, since[k]))
                 after = np.searchsorted(m5.index, P.index[k] + pd.Timedelta(tf))   # M5 candles since that close
@@ -392,7 +483,11 @@ def _momentum(df, s, bias, z, base, live=None):
                 entry = trigger - s.MOMENTUM_LIMIT * (trigger - stop)   # ... a limit halfway back to the stop
                 risk = d * (entry - stop)
                 if not risk > 0:
+                    if rec is not None:
+                        rec["stage"] = "M5 break in a pause, but no room for a stop"
                     continue
+                if rec is not None:
+                    rec["stage"] = "order placed"
                 when = pd.Timestamp(m5_close[m])
                 target = entry + d * s.MOMENTUM_R * risk
                 last = min(j + int(pd.Timedelta(s.MOMENTUM_WAIT) / base), len(df) - 1)
@@ -417,19 +512,20 @@ def _momentum(df, s, bias, z, base, live=None):
     return rows
 
 
-def backtest(df, settings=None):
-    """Every trade both rules would have taken on df (M1 bars), one row each."""
+def backtest(df, settings=None, journal=None, trace=None):
+    """Every trade both rules would have taken on df (M1 bars), one row each.
+    journal / trace: optional records for tools/ (see _sniper, _momentum); they change nothing."""
     s = settings or Settings()
     base = bar_length(df.index)
     bias = htf_bias(df)
     z = pois(df)                                      # H1 / H4 / D1: the targets
     rows = []
     if base <= pd.Timedelta("1min"):
-        rows += _sniper(df, s, bias, z, base)
+        rows += _sniper(df, s, bias, z, base, journal=journal, trace=(trace or {}).get("sniper"))
     else:
         print(f"note: the sniper entry needs M1 bars (these are {base}); only momentum orders are tested")
     if base <= pd.Timedelta("5min"):
-        rows += _momentum(df, s, bias, z, base)
+        rows += _momentum(df, s, bias, z, base, trace=(trace or {}).get("momentum"))
     trades = pd.DataFrame(rows)
     if trades.empty:
         return trades
