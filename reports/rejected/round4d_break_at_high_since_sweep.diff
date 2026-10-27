@@ -1,0 +1,17 @@
+# REJECTED, round 4, attempt d: "The M1 break is a close above the highest high between the sweep and the
+# low after it (the drop into the sweep), without also needing the last confirmed swing high."
+# Why tried: 8 of your sniper trades were missed at "swept, waiting for the break": your M1 break marks
+# sit nearer than the bot's break level.
+# Dev: recall 8.2% -> 7.2%, precision 2.14% -> 1.48% (474 bot trades). Both fell.
+# Shown against the round-3 code (round 4 kept nothing).
+--- a/strategy.py
++++ b/strategy.py
+@@ -184,7 +184,7 @@
+         top = self.sweep_bar + int(np.argmax(h[self.sweep_bar:self.ext_bar + 1]))
+         level, level_bar = h[top], top
+         sh = self.sw.last_high
+-        if sh is not None and sh.price > level:
++        if False and sh is not None and sh.price > level:   # the old swing high no longer counts
+             level, level_bar = sh.price, sh.idx
+         self.level = level
+         if t > self.ext_bar and c[t] > level:

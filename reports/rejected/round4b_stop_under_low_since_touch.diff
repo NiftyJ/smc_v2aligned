@@ -1,0 +1,53 @@
+# REJECTED, round 4, attempt b: "The stop goes under the lowest point since price reached the POI (the
+# whole pullback), not only under the last M1 range."
+# Why tried: your sniper stops are about 2.4x the bot's (median 2.65 against 1.1 M1 ATR) and sit around
+# the low of the last 1-2 hours, not under the M1 sweep. The bot's tight stops are hit within minutes.
+# Dev: recall 8.2% -> 6.2%, precision 2.14% -> 1.95% (307 bot trades). Both fell: the two matches that
+# were re-tries after a stop-out (#496, #612) are gone.
+# FINDING (not kept): the bot does much better with it: total +308.6R (was +203R on this dev run),
+# win rate 14.8%, max drawdown 52R (was 66R). It makes more money while matching you less.
+# Shown against the round-3 code (round 4 kept nothing).
+--- a/strategy.py
++++ b/strategy.py
+@@ -70,6 +70,7 @@
+     MAX_BARS_SWEEP_TO_SHIFT: int = 30       # smc_dickson: the break must come within 30 candles of the sweep
+     MAX_BARS_WAIT_FILL: int = 40            # smc_dickson: a limit order not filled in 40 candles is cancelled
+     STOP_BUFFER_ATR: float = 0.05           # smc_dickson: the stop goes this far beyond the extreme
++    STOP_AT: str = "touch"             # the stop goes under the lowest low since the POI was touched
+     MIN_RISK_ATR: float = 0.25              # smc_dickson: skip setups whose stop is tighter than this
+     SNIPER_WINDOW: str = "1D"               # an M1 entry may come up to this long after the touch
+     SNIPER_MAX_SHOTS: int = 3               # tries per POI: after a stop-out, another on a new M1 break up (journal: "max 3 tries")
+@@ -302,10 +303,14 @@
+     rows = []
+     owner0 = {d: owner[d].copy() for d in (1, -1)} if trace is not None else None   # before "one setup per touch"
+ 
+-    def place(d, t, ob_bar, range_low, order, base_row):
++    def place(d, t, ob_bar, range_low, order, base_row, info=None):
+         """A limit at the HIGH (top) of the order block, stop just beyond the range's low
+         (all in the flipped chart, where every trade is a long)."""
+         O, H, L, C = flipped[d]
++        info = info if info is not None else (base_row or {}).get("info")
++        if s.STOP_AT == "touch" and info is not None:
++            t0 = int(np.searchsorted(closes_t, pd.Timestamp(info["poi_touch"]).to_datetime64()))
++            range_low = min(range_low, L[t0:t + 1].min())
+         entry, stop = H[ob_bar], range_low - s.STOP_BUFFER_ATR * a[t]
+         if not (np.isfinite(a[t]) and entry - stop >= s.MIN_RISK_ATR * a[t] and entry < C[t]):
+             return base_row if order > 1 else None      # a bad successive order keeps the one before
+@@ -396,7 +401,7 @@
+                     level = H[r_["from_bar"]:r_["ext_bar"] + 1].max()   # the failed try's high, or higher
+                     if t > r_["ext_bar"] and C[t] > level and trend[t] == d:
+                         leg = r_["ext_bar"]
+-                        q = place(d, t, find_order_block(O, H, L, C, leg)[0], L[leg], 1, None)
++                        q = place(d, t, find_order_block(O, H, L, C, leg)[0], L[leg], 1, None, r_["info"])
+                         if q is not None:
+                             q.update(info=r_["info"], expires=r_["expires"], shot=r_["shot"])
+                             pending[d], rearm[d] = q, None
+@@ -419,7 +424,7 @@
+             info = dict(pois_by_dir[d][p][2], sweep_time=pd.Timestamp(times[cand["sweep_bar"]]),
+                         swept=d * cand["swept"], broken=d * cand["broken"],
+                         first_bos=pd.Timestamp(closes_t[t]))
+-            q = place(d, t, cand["ob_bar"], L[cand["ext_bar"]], 1, None)    # first range: its low = the sweep's low
++            q = place(d, t, cand["ob_bar"], L[cand["ext_bar"]], 1, None, info)    # first range: its low = the sweep's low
+             if q is not None:
+                 q.update(info=info, expires=min(pois_by_dir[d][p][0] + window, n), shot=1)
+                 pending[d] = q

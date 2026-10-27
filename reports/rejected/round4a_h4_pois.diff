@@ -1,0 +1,19 @@
+# REJECTED, round 4, attempt a: "H4 order blocks and FVGs are POIs too (the sniper's POI timeframes: M15,
+# M30, H1 and H4)."
+# Why tried: your missed buys at #590 #593 #599 #603 #635 #640 sit in H4 zones (your setups mark H4 FVGs /
+# reactions there); the bot's POIs stop at H1.
+# Dev: recall 8.2% -> 8.2%, precision 2.14% -> 2.04% (392 bot trades, was 373). It still misses those
+# trades: the bot fires at the first sweep + break after the touch, with its usual tight stop, and is
+# stopped out before price reaches your deeper entry.
+# Shown against the round-3 code (round 4 kept nothing).
+--- a/strategy.py
++++ b/strategy.py
+@@ -55,7 +55,7 @@
+ 
+ @dataclass
+ class Settings:
+-    STAIR_TFS: tuple = ("15min", "30min", "1h")   # the sniper's POI: an order block / FVG on these timeframes
++    STAIR_TFS: tuple = ("15min", "30min", "1h", "4h")   # the sniper's POI: an order block / FVG on these timeframes
+     REQUIRE_STAIRCASE: bool = False         # True = only order blocks inside a staircase range
+     POI_KINDS: tuple = ("ob", "fvg")        # the sniper's POI zones on STAIR_TFS: order blocks and fair value gaps
+     TREND_TFS: tuple = ("d1", "h4", "h1")   # the trend (bias.py) on these timeframes ...

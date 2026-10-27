@@ -1,0 +1,48 @@
+# REJECTED, round 4, attempt c: "The stop goes under the POI's higher low (the level whose close
+# cancels the order anyway), or under the range's low if that is lower."
+# Dev: recall 8.2% -> 6.2%, precision 2.14% -> 2.14% (6/280). Recall fell, precision did not rise.
+# FINDING (not kept): total +317.6R, win rate 15.6%, max drawdown 46R. More money, less matching.
+# Shown against the round-3 code (round 4 kept nothing).
+--- a/strategy.py
++++ b/strategy.py
+@@ -70,6 +70,7 @@
+     MAX_BARS_SWEEP_TO_SHIFT: int = 30       # smc_dickson: the break must come within 30 candles of the sweep
+     MAX_BARS_WAIT_FILL: int = 40            # smc_dickson: a limit order not filled in 40 candles is cancelled
+     STOP_BUFFER_ATR: float = 0.05           # smc_dickson: the stop goes this far beyond the extreme
++    STOP_AT: str = "hl"                # the stop goes under the POI's higher low
+     MIN_RISK_ATR: float = 0.25              # smc_dickson: skip setups whose stop is tighter than this
+     SNIPER_WINDOW: str = "1D"               # an M1 entry may come up to this long after the touch
+     SNIPER_MAX_SHOTS: int = 3               # tries per POI: after a stop-out, another on a new M1 break up (journal: "max 3 tries")
+@@ -302,10 +303,13 @@
+     rows = []
+     owner0 = {d: owner[d].copy() for d in (1, -1)} if trace is not None else None   # before "one setup per touch"
+ 
+-    def place(d, t, ob_bar, range_low, order, base_row):
++    def place(d, t, ob_bar, range_low, order, base_row, info=None):
+         """A limit at the HIGH (top) of the order block, stop just beyond the range's low
+         (all in the flipped chart, where every trade is a long)."""
+         O, H, L, C = flipped[d]
++        info = info if info is not None else (base_row or {}).get("info")
++        if s.STOP_AT == "hl" and info is not None:
++            range_low = min(range_low, d * info["hl"])
+         entry, stop = H[ob_bar], range_low - s.STOP_BUFFER_ATR * a[t]
+         if not (np.isfinite(a[t]) and entry - stop >= s.MIN_RISK_ATR * a[t] and entry < C[t]):
+             return base_row if order > 1 else None      # a bad successive order keeps the one before
+@@ -396,7 +400,7 @@
+                     level = H[r_["from_bar"]:r_["ext_bar"] + 1].max()   # the failed try's high, or higher
+                     if t > r_["ext_bar"] and C[t] > level and trend[t] == d:
+                         leg = r_["ext_bar"]
+-                        q = place(d, t, find_order_block(O, H, L, C, leg)[0], L[leg], 1, None)
++                        q = place(d, t, find_order_block(O, H, L, C, leg)[0], L[leg], 1, None, r_["info"])
+                         if q is not None:
+                             q.update(info=r_["info"], expires=r_["expires"], shot=r_["shot"])
+                             pending[d], rearm[d] = q, None
+@@ -419,7 +423,7 @@
+             info = dict(pois_by_dir[d][p][2], sweep_time=pd.Timestamp(times[cand["sweep_bar"]]),
+                         swept=d * cand["swept"], broken=d * cand["broken"],
+                         first_bos=pd.Timestamp(closes_t[t]))
+-            q = place(d, t, cand["ob_bar"], L[cand["ext_bar"]], 1, None)    # first range: its low = the sweep's low
++            q = place(d, t, cand["ob_bar"], L[cand["ext_bar"]], 1, None, info)    # first range: its low = the sweep's low
+             if q is not None:
+                 q.update(info=info, expires=min(pois_by_dir[d][p][0] + window, n), shot=1)
+                 pending[d] = q
