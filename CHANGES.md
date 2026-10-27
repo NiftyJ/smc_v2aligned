@@ -114,7 +114,9 @@ Looked at but not tried, because the data gave no rule to try:
 
 ## Findings: more money, less like you
 
-The brief asks for these to be reported, not kept:
+The brief asks for these to be reported, not kept. All the profit figures are dev only and before
+costs. The final check shows the bot's dev profit does not carry over to the holdout, with or without
+the changes (`FINAL_REPORT.md`).
 
 - **Wider stops (4b, 4c).** A stop under the whole pullback, or under the POI's higher low, earned
   +308.6R or +317.6R on dev against +203R, with a lower drawdown (52R or 46R against 66R). But 2 of

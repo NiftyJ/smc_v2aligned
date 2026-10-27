@@ -9,8 +9,8 @@ commit, tagged `baseline`. Every change is listed in `CHANGES.md`, and each roun
   207 trades are yours (up from 3 of 232).
 - The gain didn't hold on the holdout (recall 6.1% → 4.1%), so it was fitted to the dev trades.
 - What did hold: the bot is more selective, with about half as many trades, closer to your rate.
-- Before and after the changes, the bot is about break-even on the holdout before costs, and loses
-  after a normal spread.
+- Before and after the changes, the bot is about break-even on the holdout before costs. It would
+  lose with a $0.20–0.30 spread on each trade.
 - The rest of the gap is in things the bot can't see in prices alone. See the 5 differences below
   and what each needs from you.
 
@@ -78,8 +78,8 @@ the same result.
    - You buy hours later and deeper, with a stop under the whole pullback (median 2.65 ATR, around the
      low of the last 1–2 hours).
    - Half of the bot's matches are those re-tries: it reaches your entry only by being stopped out first.
-   - Wider structural stops made the bot far more profitable but lost those matches (round 4,
-     findings).
+   - Wider structural stops made the bot about 50% more profitable on dev, but lost those matches
+     (round 4, findings).
    - **Needed:**
      - Which level you wait to see taken before you enter (the session low, the previous day's low, an
        M15 swing low?). A "liquidity taken" mark linked to each trade would let the sweep target be
@@ -101,8 +101,8 @@ the same result.
      because the brief says the comparison is only valid on the same prices.
 4. **Which zone is the POI.** 20 of your trades had no bot POI armed, and 112 of the bot's 199 extra
    trades are at places where you had no zone marked.
-   - Your POIs are mostly H1/H4 FVGs, often several days old, plus some D1 order blocks and M5
-     structure, chosen by context.
+   - Your POIs are mostly FVGs from M15 to H4, the H4 ones often several days old, plus some D1
+     order blocks and M5 structure, chosen by context.
    - The bot arms the first touch of the newest big FVG on M15/M30/H1, for one day.
    - Your entries are often not inside the zone you marked: 21% are inside, 57% above it.
    - **Needed:** how you pick one zone among several. Marking the zones you looked at and skipped
@@ -132,8 +132,9 @@ the same result.
 - **Tiny stops and no costs.**
   - `MIN_RISK_ATR = 0.25` M1 ATR allows stops of $0.13 at night, below a normal XAUUSD spread.
   - `COST` defaults to 0, so all R figures here are before costs.
-  - The bot's tight-stop trades would suffer most from costs. Run `strategy.py --cost` with your
-    broker's spread before trusting the profit numbers.
+  - The bot's tight-stop trades would suffer most from costs. Set `COST` in `Settings` to your
+    broker's spread and run `python tools/run_backtest.py --round 9` before trusting the profit
+    numbers. `strategy.py --cost` can't read this price file (see the first point).
 - **The D1 trend needs about 6 weeks of daily candles** (10-candle swings on each side, and two swing
   highs and lows) before it is known. If the live script loads less history than that, the bot can't
   trade at all. Please check how many days `live_mt5.py` loads.
