@@ -52,6 +52,29 @@ def test_only_closed_candles_are_used():
                 pd.testing.assert_frame_equal(a, b)
 
 
+def test_a_stop_counts_only_once_it_is_hit():
+    """A stop-out gives the sniper another try, but only once the stop is hit. It once counted from the fill:
+    a trade to be stopped later took the re-try slot at its fill, and a waiting re-try vanished before
+    anyone could know. Cut the prices on such a trade's stop candle: nothing decided before may change."""
+    sn = TR[TR["type"] == "sniper"]
+    checked = 0
+    for b in sn[sn["outcome"] == "stop"].itertuples():
+        retry = sn[(sn["direction"] == b.direction) & (sn["shot"] > 1) & (sn["placed"] > b.filled)
+                   & (sn["placed"] <= b.exit_time)]                 # another chain's re-try while b was open
+        if retry.empty:
+            continue
+        T = DF.index.get_loc(b.exit_time - BASE)                    # b's stop candle: it and all after removed
+        part = backtest(DF.iloc[:T])
+        a = TR[TR["placed"] <= DF.index[T]][DECISION].reset_index(drop=True)
+        c = part[part["placed"] <= DF.index[T]][DECISION].reset_index(drop=True).astype(a.dtypes.to_dict())
+        pd.testing.assert_frame_equal(a, c)
+        checked += 1
+        if checked == 3:
+            break
+    assert checked > 0, ("no re-try while another trade of its direction was open and later stopped: with the slot "
+                         "taken at the fill (the old leak) there can be none")
+
+
 def test_every_trade_follows_the_rules():
     bias, z = htf_bias(DF), pois(DF)
     tables = {}

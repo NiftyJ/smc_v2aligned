@@ -310,6 +310,8 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
     pending = {1: None, -1: None}                       # the order waiting to be filled, per direction
     last_owner = {1: -1, -1: -1}
     rearm = {1: None, -1: None}                         # after a stop-out: waiting for a new M1 break up
+    stopped = {1: [], -1: []}                           # re-tries of filled trades that will be stopped: armed only from
+                                                        # the candle after the stop, when live trading knows of it
     rows = []
     owner0 = {d: owner[d].copy() for d in (1, -1)} if trace is not None else None   # before "one setup per touch"
 
@@ -337,6 +339,10 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
 
     for t in range(n):
         for d in (1, -1):
+            if stopped[d] and min(r["start"] for r in stopped[d]) <= t:   # stopped out on the last candle: its re-try
+                due = [r for r in stopped[d] if r["start"] <= t]          # takes the slot (the latest stop-out wins)
+                stopped[d] = [r for r in stopped[d] if r["start"] > t]
+                rearm[d] = max(due, key=lambda r: r["start"])
             O, H, L, C = flipped[d]
             p = owner[d][t]
             m = machines[d]
@@ -378,8 +384,8 @@ def _sniper(df, s, bias, z, base, live=None, journal=None, trace=None):
                                             first_placed=pd.Timestamp(closes_t[q["first_bar"]])))
                     if row["outcome"] == "stop" and q["shot"] < s.SNIPER_MAX_SHOTS:   # stopped: another try later
                         j = int(np.searchsorted(closes_t, row["exit_time"].to_datetime64()))
-                        rearm[d] = dict(start=j + 1, info=q["info"], expires=q["expires"], shot=q["shot"] + 1,
-                                        from_bar=q["placed_bar"], ext_bar=-1)
+                        stopped[d].append(dict(start=j + 1, info=q["info"], expires=q["expires"], shot=q["shot"] + 1,
+                                               from_bar=q["placed_bar"], ext_bar=-1))
                     continue
                 hl = d * q["info"]["hl"]
                 if C[t] < q["stop_f"] or C[t] < hl or t >= q["expires"]:   # range or higher low broken, or too late
