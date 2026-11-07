@@ -62,9 +62,9 @@ SAME_LEVEL_R = 0.2           # zones whose near edges are closer than this are o
 MAX_OPTIONS = 3
 TOUCH_WAIT = "2D"            # price must reach the POI within this long
 WARMUP = 300                 # candles the swing trackers see before the touch
-M1_WINDOW = (pd.Timedelta("4h"), pd.Timedelta("4h"))           # before / after the decision
-M15_WINDOW = (pd.Timedelta("60h"), pd.Timedelta("24h"))
-H1_WINDOW = (pd.Timedelta("8D"), pd.Timedelta("1D"))
+WINDOWS = {"H4": ("30D", "5D"), "H1": ("8D", "2D"), "M15": ("48h", "18h"),   # candles before / after the decision,
+           "M5": ("12h", "6h"), "M1": ("4h", "3h")}                         # per timeframe, for the charts
+RULES = {"H4": "4h", "H1": "1h", "M15": "15min", "M5": "5min", "M1": None}
 EQUAL_ATR = 0.2              # equal lows: other M1 swing lows within this many M1 ATRs of the setup's low ...
 EQUAL_LOOKBACK = 240         # ... in the M1 candles before the decision (4 hours)
 EQUAL_SWING = 3              # an M1 swing low = lowest with this many candles on each side
@@ -325,7 +325,7 @@ def main():
     z = pois(df, tfs=POI_TFS, swing_n=s.SWING_N)
     z = z[z["type"].str.endswith(("_ob", "_fvg"))].reset_index(drop=True)
     times = df.index.to_numpy()
-    m15, h1 = resample(df, "15min"), resample(df, "1h")
+    frames = {k: (df if r is None else resample(df, r)) for k, r in RULES.items()}
     digits = max(0, 5 - int(math.log10(max(float(df["close"].median()), 1))))
 
     cases = []
@@ -383,9 +383,8 @@ def main():
             bot=dict(outcome=r["outcome"], R=round(float(r["R"]), 2), R_after_cost=round(float(r["R"]) - args.cost / risk, 2),
                      fill=str(r["fill_time"])[:16], exit=str(r.get("exit_time"))[:16]),
             alt=alt, options=options, eq=equal_lows(rules, i0, d, stop, digits),
-            m1=candles(df, when - M1_WINDOW[0], when + M1_WINDOW[1], when, digits),
-            m15=candles(m15, when - M15_WINDOW[0], when + M15_WINDOW[1], when, digits),
-            h1=candles(h1, when - H1_WINDOW[0], when + H1_WINDOW[1], when, digits)))
+            bars={k: candles(frames[k], when - pd.Timedelta(a), when + pd.Timedelta(b), when, digits)
+                  for k, (a, b) in WINDOWS.items()}))
         if (k + 1) % 50 == 0:
             print(f"  {k + 1} cases")
 

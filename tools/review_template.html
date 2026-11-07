@@ -1,29 +1,33 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bot Trade Review</title>
+<script>try { const t = localStorage.getItem("review-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
 <style>
 :root {
-  --bg: #f4f6f8; --surface: #ffffff; --surface-2: #eef1f5; --ink: #1d2733; --muted: #5d6b7a; --line: #d3dae2;
-  --up: #2a9d8f; --down: #e76f51; --entry: #2f6fd6; --stop: #c94c4c; --target: #2a9d8f; --poi: rgba(217,130,43,.18);
-  --poi-line: #d9822b; --opt: rgba(124,77,255,.14); --opt-line: #7c4dff; --grid: #e6eaef; --now: #8a96a3;
-  --ok: #1f9d55; --no: #c94c4c; --sel: #2f6fd6;
+  --bg: #f0f3fa; --surface: #ffffff; --surface-2: #e9edf4; --ink: #131722; --muted: #5d6676; --line: #d6dbe5;
+  --up: #089981; --down: #f23645; --entry: #2962ff; --stop: #f23645; --target: #089981; --poi: rgba(255,152,0,.16);
+  --poi-line: #e08600; --opt: rgba(124,77,255,.13); --opt-line: #7c4dff; --grid: #eef1f6; --now: #8a93a6;
+  --ok: #089981; --no: #f23645; --sel: #2962ff; --hide: rgba(120,130,150,.10); --label-bg: rgba(255,255,255,.86);
+  --cross: #9598a1; --cross-bg: #363a45;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #11161c; --surface: #1a2129; --surface-2: #222b35; --ink: #e4e9ef; --muted: #9aa8b6; --line: #34404d;
-    --up: #3cc2b2; --down: #ff8a6b; --entry: #6ea2ff; --stop: #ff6b6b; --target: #3cc2b2; --poi: rgba(255,170,80,.16);
-    --poi-line: #ffaa50; --opt: rgba(160,130,255,.16); --opt-line: #a58bff; --grid: #252e38; --now: #6d7a88;
-    --ok: #3ccf7a; --no: #ff6b6b; --sel: #6ea2ff;
+    --bg: #0f121a; --surface: #131722; --surface-2: #1e222d; --ink: #d1d4dc; --muted: #868b98; --line: #2a2e39;
+    --up: #26a69a; --down: #ef5350; --entry: #2962ff; --stop: #ef5350; --target: #26a69a; --poi: rgba(255,167,38,.15);
+    --poi-line: #ffa726; --opt: rgba(149,117,255,.15); --opt-line: #9575ff; --grid: #1c202b; --now: #5d6373;
+    --ok: #26a69a; --no: #ef5350; --sel: #2962ff; --hide: rgba(255,255,255,.035); --label-bg: rgba(19,23,34,.86);
+    --cross: #758096; --cross-bg: #4a5163;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #11161c; --surface: #1a2129; --surface-2: #222b35; --ink: #e4e9ef; --muted: #9aa8b6; --line: #34404d;
-  --up: #3cc2b2; --down: #ff8a6b; --entry: #6ea2ff; --stop: #ff6b6b; --target: #3cc2b2; --poi: rgba(255,170,80,.16);
-  --poi-line: #ffaa50; --opt: rgba(160,130,255,.16); --opt-line: #a58bff; --grid: #252e38; --now: #6d7a88;
-  --ok: #3ccf7a; --no: #ff6b6b; --sel: #6ea2ff;
+  --bg: #0f121a; --surface: #131722; --surface-2: #1e222d; --ink: #d1d4dc; --muted: #868b98; --line: #2a2e39;
+  --up: #26a69a; --down: #ef5350; --entry: #2962ff; --stop: #ef5350; --target: #26a69a; --poi: rgba(255,167,38,.15);
+  --poi-line: #ffa726; --opt: rgba(149,117,255,.15); --opt-line: #9575ff; --grid: #1c202b; --now: #5d6373;
+  --ok: #26a69a; --no: #ef5350; --sel: #2962ff; --hide: rgba(255,255,255,.035); --label-bg: rgba(19,23,34,.86);
+  --cross: #758096; --cross-bg: #4a5163;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
@@ -39,12 +43,19 @@ header h1 { font-size: 15px; margin: 0; font-weight: 700; }
 #info { padding: 8px 12px 0; font-size: 13.5px; line-height: 1.45; }
 #info b { font-weight: 700; }
 #info .muted { color: var(--muted); }
-#charts { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1.25fr; gap: 6px;
-  padding: 6px 12px; min-height: 0; }
-.chart { position: relative; flex: 1; min-height: 120px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.chart.m1 { grid-column: 1 / -1; }
-.chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.chart .tag { position: absolute; left: 8px; top: 6px; font-size: 12px; font-weight: 700; color: var(--muted); background: var(--surface); padding: 1px 6px; border-radius: 6px; }
+#charts { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; padding: 6px 8px; min-height: 0; }
+.pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.phead { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-bottom: 1px solid var(--line); font-size: 12.5px; min-height: 32px; }
+.phead > b { padding: 0 4px; }
+.tfs { display: flex; gap: 2px; }
+.tfb { height: 26px; min-width: 40px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-weight: 600; font-size: 12.5px; cursor: pointer; }
+.tfb:hover { background: var(--surface-2); color: var(--ink); }
+.tfb.on { background: var(--surface-2); color: var(--sel); }
+.ohlc { flex: 1; text-align: right; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ohlc b { color: var(--ink); font-weight: 600; }
+.reset { height: 26px; width: 30px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; }
+.pbody { position: relative; flex: 1; min-height: 200px; }
+.pbody canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: pan-y; cursor: crosshair; display: block; }
 
 #legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); padding: 0 12px 4px; }
 #legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
@@ -55,9 +66,9 @@ header h1 { font-size: 15px; margin: 0; font-weight: 700; }
 #result .pos { color: var(--ok); font-weight: 700; } #result .neg { color: var(--no); font-weight: 700; }
 footer { background: var(--surface); border-top: 1px solid var(--line); padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
-.big { flex: 1; min-width: 120px; min-height: 52px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); color: var(--ink);
-  font-size: 16px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 8px; line-height: 1.2; }
-.big small { font-weight: 500; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.big { flex: 1; min-width: 120px; min-height: 46px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); color: var(--ink);
+  font-size: 15px; font-weight: 700; cursor: pointer; display: block; text-align: center; padding: 4px 8px; line-height: 1.2; }
+.big small { display: block; font-weight: 500; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .big.approve { border-color: var(--ok); color: var(--ok); }
 .big.skip { border-color: var(--no); color: var(--no); }
 .big.opt { border-color: var(--opt-line); color: var(--opt-line); }
@@ -73,8 +84,9 @@ kbd { font-family: inherit; font-size: 10.5px; border: 1px solid var(--line); bo
 @media (max-width: 760px) {
   html, body { height: auto; min-height: 100%; }
   #charts { flex: none; }
-  #charts { grid-template-columns: 1fr; grid-template-rows: none; }
-  .chart.h1, .chart.m15 { height: 210px; } .chart.m1 { height: 270px; grid-column: auto; }
+  #charts { grid-template-columns: 1fr; padding: 6px 4px; }
+  .pbody { flex: none; height: 330px; }
+  .ohlc { font-size: 10.5px; } .tfb { min-width: 34px; padding: 0 6px; }
   footer { position: static; }
   #reasons { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .chip { flex: none; }
@@ -95,8 +107,11 @@ kbd { font-family: inherit; font-size: 10.5px; border: 1px solid var(--line); bo
 .pcard .ph { font-size: 13px; font-weight: 700; color: var(--opt-line); text-align: center; line-height: 1.25; }
 .pcard .ph small { display: block; font-weight: 500; color: var(--muted); font-size: 11px; }
 .pbtns { display: flex; gap: 5px; }
-.pbtns .big { min-width: 0; min-height: 40px; font-size: 14px; border-width: 1.5px; }
+.pbtns .big { min-width: 0; min-height: 34px; font-size: 14px; border-width: 1.5px; }
 #result tr.mine td { background: rgba(47,111,214,.10); font-weight: 600; }
+@media (min-width: 1200px) { #answers { flex-wrap: nowrap; } .trio { flex: 1.5 1 0; flex-wrap: nowrap; } #answers .pcard { min-width: 0; flex: 1 1 0; } }
+footer { padding: 6px 10px 8px; gap: 6px; }
+.chip { min-height: 32px; }
 #done { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 10; align-items: center; justify-content: center; }
 #done.on { display: flex; }
 #done > div { background: var(--surface); border-radius: 14px; padding: 20px; max-width: 420px; margin: 16px; line-height: 1.5; }
@@ -107,18 +122,19 @@ kbd { font-family: inherit; font-size: 10.5px; border: 1px solid var(--line); bo
   <h1>Bot trade review</h1>
   <div id="prog"><div></div></div>
   <span id="count"></span>
+  <button class="hbtn" id="theme" title="Light / dark">◐</button>
   <button class="hbtn" id="export" title="Download your answers as CSV">Export answers</button>
 </header>
 <div id="info"></div>
 <div id="legend">
   <span><i style="background:var(--entry)"></i>bot entry</span><span><i style="background:var(--stop)"></i>bot stop</span>
   <span><i style="background:var(--target)"></i>target</span><span><i style="background:var(--poi-line)"></i>bot's POI</span>
-  <span><i style="background:var(--opt-line)"></i>deeper POI 1·2·3</span><span>▲ = the candle that formed the zone (its box starts there)</span><span><i style="background:var(--now)"></i>now (the decision)</span>
+  <span><i style="background:var(--opt-line)"></i>deeper POI 1·2·3</span><span>▲ the candle that formed the zone</span>
+  <span>scroll / pinch = zoom · drag = move · double-click = reset</span>
 </div>
 <div id="charts">
-  <div class="chart h1"><canvas id="c60"></canvas><span class="tag">H1 · HTF POIs (H1 / H4)</span></div>
-  <div class="chart m15"><canvas id="c15"></canvas><span class="tag">M15 · setup POIs (M15 / M30)</span></div>
-  <div class="chart m1"><canvas id="c1"></canvas><span class="tag">M1 · entry</span></div>
+  <div class="pane" id="pane-ctx"><div class="phead"><b>Context</b><span class="tfs"></span><span class="ohlc mono"></span><button class="reset" title="Reset the view (or double-click the chart)">⟲</button></div><div class="pbody"><canvas></canvas></div></div>
+  <div class="pane" id="pane-ent"><div class="phead"><b>Entry</b><span class="tfs"></span><span class="ohlc mono"></span><button class="reset" title="Reset the view (or double-click the chart)">⟲</button></div><div class="pbody"><canvas></canvas></div></div>
 </div>
 <div id="result"></div>
 <footer>
@@ -148,137 +164,241 @@ let reveal = false, picked = new Set();
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const fmt = (x, d = META.digits) => x == null ? "–" : Number(x).toFixed(d);
 
-// ---------------------------------------------------------------- the chart
-function draw(canvas, bars, tfMin, c, showFuture, tfs) {
-  const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  const g = canvas.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
-  const zones = [];
-  if (c.poi) zones.push({ top: c.poi.top, bottom: c.poi.bottom, tf: c.poi.tf, f: c.poi.formed_min, u: null, formed: c.poi.formed,
-                          fill: css("--poi"), line: css("--poi-line"), label: `bot's POI · ${c.poi.tf || ""}` });
-  c.options.forEach((o, k) => zones.push({ top: o.top, bottom: o.bottom, tf: o.tf, f: o.formed_min, u: o.used_min, formed: o.formed,
-                                           fill: css("--opt"), line: css("--opt-line"), label: `${k + 1} · ${o.tf} ${o.kind}` }));
-  const shown = zones.filter(z => !tfs || tfs.includes(z.tf));
-  if (!bars.t.length) return;
-  {                                                               // zoom: from just before the earliest POI's candle
-    const nAll = bars.t.length;
-    let kNow0 = bars.t.findIndex(t => t + tfMin > 0); if (kNow0 < 0) kNow0 = nAll;
-    const fs = shown.map(z => z.f).filter(f => f != null && f >= bars.t[0]);
-    let k0 = Math.max(0, kNow0 - 120);
-    if (tfs && fs.length) {
-      const kf = bars.t.findIndex(t => t + tfMin > Math.min(...fs));
-      k0 = Math.max(0, Math.min(kf - 12, kNow0 - 40));
-    }
-    const k1 = tfs ? Math.min(nAll, kNow0 + Math.max(12, Math.round((kNow0 - k0) * 0.5))) : nAll;
-    const cut = a => a.slice(k0, k1);
-    bars = { t: cut(bars.t), open: cut(bars.open), high: cut(bars.high), low: cut(bars.low), close: cut(bars.close) };
+// ---------------------------------------------------------------- the charts: two panes (context, entry), like a trading terminal
+const TFMIN = { H4: 240, H1: 60, M15: 15, M5: 5, M1: 1 };
+const DEFAULT_N = { H4: 90, H1: 100, M15: 110, M5: 120, M1: 120 };     // candles in view by default
+const ROOM = 4;                                                          // blank candles after "now" before you answer
+const PANES = [
+  { key: "ctx", title: "Context", tf: "H1", choices: ["H4", "H1", "M15"], view: null, mouse: null },
+  { key: "ent", title: "Entry", tf: "M1", choices: ["M15", "M5", "M1"], view: null, mouse: null },
+];
+let caseShown = -1;
+
+function zonesOf(c) {
+  const z = [];
+  if (c.poi) z.push({ top: c.poi.top, bottom: c.poi.bottom, f: c.poi.formed_min, u: null, formed: c.poi.formed,
+                      fill: css("--poi"), line: css("--poi-line"), label: `bot's POI · ${c.poi.tf || ""}` });
+  c.options.forEach((o, k) => z.push({ top: o.top, bottom: o.bottom, f: o.formed_min, u: o.used_min, formed: o.formed,
+                                       fill: css("--opt"), line: css("--opt-line"), label: `${k + 1} · ${o.tf} ${o.kind}` }));
+  return z;
+}
+function clockOf(c, m) {
+  const d = new Date(c.decided.replace(" ", "T") + ":00Z"); d.setUTCMinutes(d.getUTCMinutes() + m);
+  return d.toISOString().slice(5, 16).replace("T", " ");
+}
+const kOf = (b, tf, m) => { const k = b.t.findIndex(t => t + tf > m); return k < 0 ? b.t.length : k; };   // candle holding minute m
+
+function defaultView(p, c) {
+  const b = c.bars[p.tf], tf = TFMIN[p.tf], nAll = b.t.length, kNow = kOf(b, tf, 0);
+  let n = Math.max(45, Math.round(DEFAULT_N[p.tf] * Math.min(1, (p.canvas.clientWidth || 700) / 650)));   // fewer on a phone
+  if (p.key === "ctx") {                                                 // the earliest POI's formation candle in view
+    const fs = zonesOf(c).map(z => z.f).filter(f => f != null && f >= b.t[0]);
+    if (fs.length) n = Math.max(n, kNow - kOf(b, tf, Math.min(...fs)) + 10);
   }
-  const n = bars.t.length; if (!n) return;
-  const past = bars.t.map(t => t + tfMin <= 0);
-  const vis = k => past[k] || showFuture;
-  const padR = 64, padT = 24, padB = 18, plotW = W - padR - 6, plotH = H - padT - padB;
-  // price range: visible candles + the levels that matter for the decision (the target only if near)
+  const after = reveal ? Math.round(n * 0.7) : ROOM;
+  const k1 = Math.min(kNow + after, reveal ? nAll : kNow + ROOM);
+  return { k0: Math.max(-2, k1 - n - (reveal ? after : 0)), k1 };
+}
+function clampView(p, c, v) {
+  const b = c.bars[p.tf], kNow = kOf(b, TFMIN[p.tf], 0), maxK = reveal ? b.t.length + 2 : kNow + ROOM;
+  let n = Math.max(15, Math.min(v.k1 - v.k0, b.t.length + ROOM));
+  let k1 = Math.min(v.k1, maxK), k0 = k1 - n;
+  if (k0 < -n * 0.5) { k0 = -n * 0.5; k1 = k0 + n; }
+  return { k0, k1 };
+}
+
+function drawPane(p, c) {
+  const cv = p.canvas, dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const b = c.bars[p.tf], tf = TFMIN[p.tf];
+  if (!b || !b.t.length) return;
+  if (p.vrev !== reveal || !p.view) { p.view = defaultView(p, c); p.vrev = reveal; }
+  p.view = clampView(p, c, p.view);
+  const { k0, k1 } = p.view, n = k1 - k0, nAll = b.t.length, kNow = kOf(b, tf, 0);
+  const padR = 72, padT = 8, padB = 22, plotW = W - padR, plotH = H - padT - padB, slot = plotW / n;
+  const X = k => (k - k0 + 0.5) * slot;
+  const drawn = k => k >= 0 && k < nAll && (reveal || b.t[k] + tf <= 0);
+  const ka = Math.max(0, Math.floor(k0)), kb = Math.min(nAll, Math.ceil(k1));
+  // price scale: the candles in view, the entry and the stop; the target and POIs only if they are near
   let lo = Infinity, hi = -Infinity;
-  for (let k = 0; k < n; k++) if (vis(k)) { lo = Math.min(lo, bars.low[k]); hi = Math.max(hi, bars.high[k]); }
-  const lv = [c.entry, c.stop, ...(tfs ? shown.flatMap(z => [z.top, z.bottom]) : [])];   // M1: the entry's scale
-  for (const v of lv) if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
-  const span0 = hi - lo || 1;
-  if (c.target != null && Math.abs(c.target - (c.dir === "long" ? hi : lo)) < span0 * 0.6) { lo = Math.min(lo, c.target); hi = Math.max(hi, c.target); }
-  const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
-  const X = k => 6 + (k + 0.5) * plotW / n, Y = p => padT + (hi - p) / (hi - lo) * plotH, bw = Math.max(1, plotW / n * 0.7);
-  // grid + price labels
-  g.font = "11px ui-monospace, Menlo, monospace"; g.textBaseline = "middle";
-  const step = niceStep((hi - lo) / 5);
-  g.strokeStyle = css("--grid"); g.fillStyle = css("--muted"); g.lineWidth = 1;
-  for (let p = Math.ceil(lo / step) * step; p <= hi; p += step) {
-    const y = Math.round(Y(p)) + .5; g.beginPath(); g.moveTo(6, y); g.lineTo(6 + plotW, y); g.stroke();
-    g.fillText(p.toFixed(step < 1 ? 2 : step < 10 ? 1 : 0), 6 + plotW + 6, y);
+  for (let k = ka; k < kb; k++) if (drawn(k)) { lo = Math.min(lo, b.low[k]); hi = Math.max(hi, b.high[k]); }
+  if (!isFinite(lo)) return;
+  for (const v of [c.entry, c.stop]) if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  const span0 = hi - lo || 1, zones = zonesOf(c);
+  const near = v => v != null && v > lo - span0 * 0.6 && v < hi + span0 * 0.6;
+  if (near(c.target)) { lo = Math.min(lo, c.target); hi = Math.max(hi, c.target); }
+  if (p.key === "ctx") for (const z of zones) if (near(z.top) && near(z.bottom)) { lo = Math.min(lo, z.bottom); hi = Math.max(hi, z.top); }
+  const pad = (hi - lo) * 0.07; lo -= pad; hi += pad;
+  const Y = v => padT + (hi - v) / (hi - lo) * plotH, P = y => hi - (y - padT) / plotH * (hi - lo);
+  // grid: prices and times
+  g.font = "11px ui-monospace, Menlo, Consolas, monospace"; g.textBaseline = "middle"; g.lineWidth = 1;
+  const step = niceStep((hi - lo) / Math.max(3, Math.round(plotH / 70)));
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+    const y = Math.round(Y(v)) + .5; g.strokeStyle = css("--grid"); g.beginPath(); g.moveTo(0, y); g.lineTo(plotW, y); g.stroke();
+    g.fillStyle = css("--muted"); g.fillText(v.toFixed(step < 1 ? 2 : step < 10 ? 1 : 0), plotW + 6, y);
   }
-  // zones: the bot's POI, the deeper options
-  const placed = [];
-  const spot = (y, w, x0 = 10) => {                              // first x from x0 where a label of width w fits at y
-    let x = x0;
-    for (let tries = 0; tries < 12; tries++) {
-      const hit = placed.find(r => Math.abs(r.y - y) < 13 && x < r.x + r.w + 8 && x + w + 8 > r.x);
-      if (!hit) break;
-      x = hit.x + hit.w + 12;
-    }
-    placed.push({ x, y, w }); return x;
-  };
-  let kNow = bars.t.findIndex(t => t + tfMin > 0); if (kNow < 0) kNow = n;
-  const xNow = 6 + kNow * plotW / n, slot = plotW / n;
-  const xAt = m => { const k = bars.t.findIndex(t => t + tfMin > m); return k < 0 ? null : 6 + k * slot; };   // the candle holding minute m
-  const overlays = [];                                            // labels + ▲ markers: drawn after the candles
-  const band = z => {
-    if (z.top == null || z.bottom == null) return;
-    const early = z.f == null || z.f < bars.t[0];                 // formed before this chart starts
-    const x0 = early ? 6 : xAt(z.f); if (x0 == null || x0 > xNow + 1 && !showFuture) return;
-    const used = z.u != null && (showFuture || z.u <= 0) ? xAt(z.u) : null;
-    const x1 = used != null ? Math.max(used + slot, x0 + slot) : (showFuture ? 6 + plotW : Math.max(xNow, x0 + slot));
-    const y1 = Y(Math.max(z.top, z.bottom)), y2 = Y(Math.min(z.top, z.bottom)), hgt = Math.max(2, y2 - y1);
-    const below = y1 > padT + plotH, above = y2 < padT;            // outside this chart's price scale
-    g.save(); g.beginPath(); g.rect(6, padT, plotW, plotH); g.clip();
-    g.fillStyle = z.fill; g.fillRect(x0, y1, x1 - x0, hgt);
-    g.strokeStyle = z.line; g.setLineDash([4, 3]); g.strokeRect(x0 + .5, y1 + .5, x1 - x0 - 1, hgt); g.setLineDash([]);
-    g.restore();
-    const ly = below ? padT + plotH - 2 : above ? padT + 16 : Math.max(y1, padT + 16);
-    overlays.push(() => {
-    if (!early && !below && !above) {                               // ▲ under the candle that formed it
-      const xm = x0 + slot / 2; g.fillStyle = z.line; g.beginPath();
-      g.moveTo(xm, y2 + 3); g.lineTo(xm - 5, y2 + 11); g.lineTo(xm + 5, y2 + 11); g.closePath(); g.fill();
-    }
-    const label = (below ? `↓ ${fmt(z.bottom)}–${fmt(z.top)} · ` : above ? `↑ ${fmt(z.bottom)}–${fmt(z.top)} · ` : "") +
-      (early ? `◀ ${z.label} · formed ${String(z.formed || "").slice(5)}` : z.label);
-    {
-      g.font = "bold 11px -apple-system, Segoe UI, sans-serif"; const w = g.measureText(label).width, x = spot(ly, w, x0 + 3);
-      g.fillStyle = css("--surface"); g.globalAlpha = .85; g.fillRect(x - 2, ly - 14, w + 4, 13); g.globalAlpha = 1;
-      g.fillStyle = z.line; g.textBaseline = "bottom"; g.fillText(label, x, ly - 2); g.textBaseline = "middle";
-    }
-    });
-  };
-  shown.forEach(band);
-  if (tfs && !shown.length) { g.fillStyle = css("--muted"); g.font = "12px -apple-system, Segoe UI, sans-serif";
-    g.fillText(`no ${tfs.slice(0, 2).join(" / ")} POI in this case`, 12, padT + 10); }
+  const every = Math.max(1, Math.ceil(110 / slot));
+  g.textAlign = "center";
+  for (let k = Math.ceil(ka / every) * every; k < kb; k += every) {
+    const x = Math.round(X(k)) + .5; g.strokeStyle = css("--grid"); g.beginPath(); g.moveTo(x, padT); g.lineTo(x, padT + plotH); g.stroke();
+    if (x > 40 && x < plotW - 40) { g.fillStyle = css("--muted"); g.fillText(clockOf(c, b.t[k]), x, H - 10); }
+  }
+  g.textAlign = "start";
+  g.save(); g.beginPath(); g.rect(0, padT, plotW, plotH); g.clip();
+  // POI boxes: from the candle that formed them, to where price used them up (or to now)
+  const xNow = (kNow - k0) * slot, labels = [];
+  for (const z of zones) {
+    if (z.top == null || z.bottom == null) continue;
+    const kf = z.f == null ? -1e9 : kOf(b, tf, z.f);
+    if (kf >= k1 || (!reveal && kf >= kNow)) continue;
+    const early = kf < k0;
+    const x0 = early ? 0 : (kf - k0) * slot;
+    const ku = z.u != null && (reveal || z.u <= 0) ? kOf(b, tf, z.u) : null;
+    const x1 = ku != null ? Math.max((ku - k0 + 1) * slot, x0 + slot) : (reveal ? plotW : Math.max(xNow, x0 + slot));
+    const y1 = Y(z.top), y2 = Y(z.bottom);
+    g.fillStyle = z.fill; g.fillRect(x0, y1, x1 - x0, y2 - y1);
+    g.strokeStyle = z.line; g.lineWidth = 1; g.globalAlpha = .9; g.strokeRect(x0 + .5, y1 + .5, x1 - x0 - 1, y2 - y1); g.globalAlpha = 1;
+    labels.push({ z, x0, y1, y2, early, kf });
+  }
+  // momentum: the M5 pause range the bot broke out of (a band: the file has its prices, not its start)
+  if (p.key === "ent" && c.pause && c.pause.top != null) {
+    const y1 = Y(c.pause.top), y2 = Y(c.pause.bottom), xe = reveal ? plotW : xNow;
+    g.fillStyle = css("--hide"); g.fillRect(0, y1, xe, y2 - y1);
+    g.strokeStyle = css("--muted"); g.setLineDash([2, 3]); g.strokeRect(.5, y1 + .5, xe - 1, y2 - y1); g.setLineDash([]);
+    labels.push({ z: { label: "M5 pause range", line: css("--muted"), top: c.pause.top, bottom: c.pause.bottom }, x0: 0, y1, y2, early: true, kf: -1, pause: true });
+  }
   // the hidden future
-  if (!showFuture) { g.fillStyle = css("--surface-2"); g.fillRect(xNow, padT, 6 + plotW - xNow, plotH);
-    g.fillStyle = css("--muted"); g.font = "12px -apple-system, Segoe UI, sans-serif"; g.textAlign = "center";
-    g.fillText("after the decision: hidden", (xNow + 6 + plotW) / 2, padT + plotH / 2); g.textAlign = "start"; }
-  g.strokeStyle = css("--now"); g.setLineDash([5, 4]); g.beginPath(); g.moveTo(xNow, padT - 6); g.lineTo(xNow, padT + plotH); g.stroke(); g.setLineDash([]);
+  if (!reveal && xNow < plotW) {
+    g.fillStyle = css("--hide"); g.fillRect(xNow, padT, plotW - xNow, plotH);
+  }
+  g.strokeStyle = css("--now"); g.setLineDash([4, 4]); g.beginPath(); g.moveTo(Math.round(xNow) + .5, padT); g.lineTo(Math.round(xNow) + .5, padT + plotH); g.stroke(); g.setLineDash([]);
   // candles
-  for (let k = 0; k < n; k++) {
-    if (!vis(k)) continue;
-    const o = bars.open[k], h = bars.high[k], l = bars.low[k], cl = bars.close[k];
-    const col = cl >= o ? css("--up") : css("--down");
-    g.globalAlpha = past[k] ? 1 : 0.45; g.strokeStyle = col; g.fillStyle = col;
-    const x = X(k); g.beginPath(); g.moveTo(x, Y(h)); g.lineTo(x, Y(l)); g.stroke();
-    const y1 = Y(Math.max(o, cl)), y2 = Y(Math.min(o, cl)); g.fillRect(x - bw / 2, y1, bw, Math.max(1, y2 - y1));
+  const bw = Math.max(1, Math.min(slot * 0.72, 22));
+  for (let k = ka; k < kb; k++) {
+    if (!drawn(k)) continue;
+    const o = b.open[k], h = b.high[k], l = b.low[k], cl = b.close[k], up = cl >= o;
+    const col = up ? css("--up") : css("--down"), x = Math.round(X(k)) + .5;
+    g.globalAlpha = b.t[k] + tf <= 0 ? 1 : 0.55;
+    g.strokeStyle = col; g.beginPath(); g.moveTo(x, Y(h)); g.lineTo(x, Y(l)); g.stroke();
+    const yb = Y(Math.max(o, cl)), hb = Math.max(1, Y(Math.min(o, cl)) - yb);
+    g.fillStyle = col; g.fillRect(Math.round(x - bw / 2), yb, Math.max(1, Math.round(bw)), hb);
   }
   g.globalAlpha = 1;
-  overlays.forEach(f => f());
-  if (!tfs && c.eq && c.eq.lows.length) {                         // equal lows at the setup: "=" on each
+  // labels and the ▲ under each POI's formation candle, on top of the candles
+  const placed = [];
+  g.font = "600 11.5px -apple-system, Segoe UI, Roboto, sans-serif";
+  for (const L of labels) {
+    if (!L.early && L.y2 > padT && L.y2 < padT + plotH) {
+      const xm = (L.kf - k0 + 0.5) * slot; g.fillStyle = L.z.line; g.beginPath();
+      g.moveTo(xm, L.y2 + 3); g.lineTo(xm - 5, L.y2 + 11); g.lineTo(xm + 5, L.y2 + 11); g.closePath(); g.fill();
+    }
+    const below = L.y1 > padT + plotH, above = L.y2 < padT;
+    const text = (below ? "↓ " : above ? "↑ " : L.early && !L.pause ? "◀ " : "") + L.z.label +
+      (below || above ? ` ${fmt(L.z.bottom)}–${fmt(L.z.top)}` : "") + (L.early && !L.pause && !below && !above ? ` · formed ${String(L.z.formed || "").slice(5)}` : "");
+    const w = g.measureText(text).width + 8;
+    let x = Math.max(2, Math.min(L.x0 + 2, plotW - w - 4)), y = Math.min(Math.max(L.y1 + 2, padT + 2), padT + plotH - 16);
+    for (let t = 0; t < 8; t++) {
+      const hit = placed.find(r => Math.abs(r.y - y) < 16 && x < r.x + r.w && x + w > r.x);
+      if (!hit) break; y = below ? hit.y - 16 : hit.y + 16;
+    }
+    placed.push({ x, y, w });
+    g.fillStyle = css("--label-bg"); g.fillRect(x, y, w, 15);
+    g.fillStyle = L.z.line; g.textBaseline = "top"; g.fillText(text, x + 4, y + 2); g.textBaseline = "middle";
+  }
+  // equal lows / highs at the setup (entry timeframes)
+  if (tf <= 5 && c.eq && c.eq.lows.length) {
     g.font = "bold 12px -apple-system, Segoe UI, sans-serif"; g.textAlign = "center";
     for (const e of c.eq.lows) {
-      const x0 = xAt(e.m); if (x0 == null) continue;
-      const x = x0 + slot / 2, y = Y(e.p) + (c.dir === "long" ? 12 : -12);
+      const k = kOf(b, tf, e.m); if (k < ka || k >= kb) continue;
+      const x = X(k), y = Y(e.p) + (c.dir === "long" ? 13 : -13);
       g.fillStyle = css("--poi-line"); g.beginPath(); g.arc(x, y, 8, 0, 2 * Math.PI); g.fill();
       g.fillStyle = "#fff"; g.fillText("=", x, y + 1);
     }
     g.textAlign = "start";
   }
-  // the bot's levels
-  const level = (p, col, label, dash) => {
-    if (p == null) return;
-    let y = Y(p), off = "";
-    if (y < padT) { y = padT; off = " ↑"; } else if (y > padT + plotH) { y = padT + plotH; off = " ↓"; }
-    g.strokeStyle = col; g.lineWidth = 1.6; g.setLineDash(dash || []); g.beginPath(); g.moveTo(6, y); g.lineTo(6 + plotW, y); g.stroke(); g.setLineDash([]); g.lineWidth = 1;
-    g.fillStyle = col; g.fillRect(6 + plotW + 1, y - 8, padR - 2, 16);
-    g.fillStyle = "#fff"; g.font = "bold 10.5px ui-monospace, Menlo, monospace"; g.fillText((label + off).slice(0, 10), 6 + plotW + 4, y);
+  g.restore();
+  // the bot's levels, with tags on the price axis
+  const level = (v, col, label, dash) => {
+    if (v == null) return;
+    let y = Y(v), off = "";
+    if (y < padT) { y = padT + 6; off = "↑"; } else if (y > padT + plotH) { y = padT + plotH - 6; off = "↓"; }
+    g.strokeStyle = col; g.lineWidth = 1.5; g.setLineDash(dash || []); g.beginPath(); g.moveTo(0, y); g.lineTo(plotW, y); g.stroke();
+    g.setLineDash([]); g.lineWidth = 1;
+    g.fillStyle = col; g.fillRect(plotW + 1, y - 9, padR - 2, 18);
+    g.fillStyle = "#fff"; g.font = "bold 10.5px ui-monospace, Menlo, Consolas, monospace";
+    g.fillText(off ? `${label} ${off}` : fmt(v), plotW + 5, y);
   };
   level(c.target, css("--target"), "target", [6, 4]);
   level(c.stop, css("--stop"), "stop");
   level(c.entry, css("--entry"), "entry");
+  // crosshair, its price and time tags, and the candle's OHLC
+  const m = p.mouse, ohlc = p.ohlcEl;
+  let k = null;
+  if (m && m.x < plotW && m.y > padT && m.y < padT + plotH) {
+    k = Math.floor(k0 + m.x / slot);
+    const xs = Math.round(X(k)) + .5, ys = Math.round(m.y) + .5;
+    g.strokeStyle = css("--cross"); g.setLineDash([3, 3]);
+    g.beginPath(); g.moveTo(xs, padT); g.lineTo(xs, padT + plotH); g.moveTo(0, ys); g.lineTo(plotW, ys); g.stroke(); g.setLineDash([]);
+    g.fillStyle = css("--cross-bg"); g.fillRect(plotW + 1, ys - 9, padR - 2, 18);
+    g.fillStyle = "#fff"; g.font = "10.5px ui-monospace, Menlo, Consolas, monospace"; g.fillText(fmt(P(m.y)), plotW + 5, ys);
+    if (drawn(k)) {
+      const tl = clockOf(c, b.t[k]), tw = g.measureText(tl).width + 10;
+      g.fillStyle = css("--cross-bg"); g.fillRect(xs - tw / 2, H - 19, tw, 17);
+      g.fillStyle = "#fff"; g.textAlign = "center"; g.fillText(tl, xs, H - 10); g.textAlign = "start";
+    }
+  }
+  if (k == null || !drawn(k)) k = Math.min(kNow, nAll) - 1;
+  if (ohlc && k >= 0 && k < nAll && drawn(k)) {
+    const up = b.close[k] >= b.open[k];
+    ohlc.innerHTML = `${clockOf(c, b.t[k])} &nbsp;O <b>${fmt(b.open[k])}</b> H <b>${fmt(b.high[k])}</b> L <b>${fmt(b.low[k])}</b> ` +
+      `C <b style="color:var(${up ? "--up" : "--down"})">${fmt(b.close[k])}</b>`;
+  }
 }
 function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))); const m = x / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; }
+
+function buildPanes() {
+  for (const p of PANES) {
+    const el = document.getElementById(`pane-${p.key}`);
+    p.canvas = el.querySelector("canvas"); p.ohlcEl = el.querySelector(".ohlc");
+    const tfs = el.querySelector(".tfs");
+    for (const tf of p.choices) {
+      const bt = document.createElement("button"); bt.textContent = tf; bt.className = "tfb" + (tf === p.tf ? " on" : "");
+      bt.onclick = () => { p.tf = tf; p.view = null; tfs.querySelectorAll(".tfb").forEach(x => x.classList.toggle("on", x.textContent === tf)); drawPane(p, CASES[i]); };
+      tfs.appendChild(bt);
+    }
+    el.querySelector(".reset").onclick = () => { p.view = null; drawPane(p, CASES[i]); };
+    const cv = p.canvas, pts = new Map();
+    let drag = null, pinch = null;
+    const local = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const zoom = (x, f) => {                                               // f > 1: fewer candles (zoom in)
+      const v = p.view, w = cv.clientWidth - 72, n = v.k1 - v.k0, kc = v.k0 + Math.max(0, Math.min(1, x / w)) * n;
+      const n2 = Math.max(15, Math.min(1500, n / f));
+      p.view = { k0: kc - (kc - v.k0) * n2 / n, k1: kc + (v.k1 - kc) * n2 / n };
+    };
+    cv.addEventListener("wheel", e => { e.preventDefault(); if (!p.view) return; zoom(local(e).x, Math.exp(-e.deltaY * 0.0015)); drawPane(p, CASES[i]); }, { passive: false });
+    cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e));
+      if (pts.size === 1) drag = { x: local(e).x, v: { ...p.view } };
+      if (pts.size === 2) { const [a, b2] = [...pts.values()]; pinch = { d: Math.abs(a.x - b2.x) || 1 }; drag = null; } });
+    cv.addEventListener("pointermove", e => {
+      const q = local(e); p.mouse = q;
+      if (pts.has(e.pointerId)) pts.set(e.pointerId, q);
+      if (pinch && pts.size === 2) { const [a, b2] = [...pts.values()], d = Math.abs(a.x - b2.x) || 1; zoom((a.x + b2.x) / 2, d / pinch.d); pinch.d = d; }
+      else if (drag) { const w = cv.clientWidth - 72, n = drag.v.k1 - drag.v.k0, dk = (q.x - drag.x) / w * n;
+        p.view = { k0: drag.v.k0 - dk, k1: drag.v.k1 - dk }; }
+      drawPane(p, CASES[i]);
+    });
+    const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) drag = null; };
+    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+    cv.addEventListener("pointerleave", () => { p.mouse = null; drawPane(p, CASES[i]); });
+    cv.addEventListener("dblclick", () => { p.view = null; drawPane(p, CASES[i]); });
+    if (window.ResizeObserver) new ResizeObserver(() => { if (p.view) drawPane(p, CASES[i]); }).observe(cv);
+  }
+}
+function renderCharts(c) {
+  if (caseShown !== i) { PANES.forEach(p => { p.view = null; p.mouse = null; }); caseShown = i; }
+  PANES.forEach(p => drawPane(p, c));
+}
 
 // ---------------------------------------------------------------- one case
 function render() {
@@ -294,9 +414,6 @@ function render() {
     (c.eq && c.eq.lows.length ? `<br><b style="color:var(--poi-line)">⚠ ${c.dir === "long" ? "equal lows" : "equal highs"}: ` +
       `${c.eq.lows.length} other M1 swing ${c.dir === "long" ? "low" : "high"}${c.eq.lows.length > 1 ? "s" : ""} within ` +
       `$${fmt(c.eq.tol, 2)} of the setup's ${c.dir === "long" ? "low" : "high"} (= on the M1 chart)</b>` : "");
-  draw(document.getElementById("c60"), c.h1, 60, c, reveal, ["H1", "H4", "D1"]);
-  draw(document.getElementById("c15"), c.m15, 15, c, reveal, ["M15", "M30"]);
-  draw(document.getElementById("c1"), c.m1, 1, c, reveal, null);
   // reasons
   const rs = document.getElementById("reasons"); rs.innerHTML = "";
   picked = new Set(a ? a.reasons : [...picked]);
@@ -349,6 +466,7 @@ function render() {
   } else res.classList.remove("on");
   document.getElementById("reveal").textContent = reveal ? "Hide what happened" : "Show what happened";
   document.getElementById("reveal").insertAdjacentHTML("beforeend", "<kbd>H</kbd>");
+  renderCharts(c);                                   // last, once the buttons and the result table have their size
 }
 function answer(choice) {
   const c = CASES[i];
@@ -419,7 +537,13 @@ addEventListener("keydown", e => {
   else if (k === "h") { reveal = !reveal; render(); }
   else { const r = REASONS.find(x => x[2].toLowerCase() === k); if (r) { const b = [...document.querySelectorAll("#reasons .chip")][REASONS.indexOf(r)]; b && b.click(); } }
 });
-let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 120); });
+document.getElementById("theme").onclick = () => {
+  const t = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", t); try { localStorage.setItem("review-theme", t); } catch (e) {}
+  renderCharts(CASES[i]);
+};
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => renderCharts(CASES[i]), 120); });
+buildPanes();
 render();
 </script>
 </body>
