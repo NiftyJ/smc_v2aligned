@@ -69,6 +69,8 @@ RULES = {"H4": "4h", "H1": "1h", "M15": "15min", "M5": "5min", "M1": None}
 EQUAL_ATR = 0.2              # equal lows: other M1 swing lows within this many M1 ATRs of the setup's low ...
 EQUAL_LOOKBACK = 240         # ... in the M1 candles before the decision (4 hours)
 EQUAL_SWING = 3              # an M1 swing low = lowest with this many candles on each side
+RANGE_NAMES = ("pause", "wyckoff", "staircase")
+TFMIN_OF = {"H4": 240, "H1": 60, "M15": 15, "M5": 5, "M1": 1}
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "review_template.html")
 
 
@@ -263,6 +265,84 @@ def candles(df, a, b, when, digits):
     return dict(t=np.diff(mins, prepend=0).tolist(), **{k: (q[k] - prev).tolist() for k in q})
 
 
+def range_frames(df, prices_path):
+    """range_types.py on every chart timeframe, cached next to the prices (M1 takes a few minutes)."""
+    from range_types import range_types
+    cache = os.path.join(os.path.dirname(os.path.abspath(prices_path)), "cache_ranges")
+    os.makedirs(cache, exist_ok=True)
+    stamp = f"{os.path.getsize(prices_path)}_{int(os.path.getmtime(prices_path))}"
+    out = {}
+    for k, rule in RULES.items():
+        f = os.path.join(cache, f"{os.path.basename(prices_path)}_{rule or '1min'}_{stamp}.pkl")
+        if os.path.exists(f):
+            out[k] = pd.read_pickle(f)
+        else:
+            print(f"  range_types on {k} ...", flush=True)
+            out[k] = range_types(df, rule) if rule else range_types(df)
+            out[k].to_pickle(f)
+    return out
+
+
+def range_boxes(rt, bars, atr_, a, b, when, tfmin, digits):
+    """Each run of a range between a and b as a box: from the candle where it began to the last candle it was on.
+    A run still on at the decision gives two boxes: as known then (shown before you answer) and the whole run
+    (shown after). v: 0 = always, 1 = before you answer only, 2 = after only. Minutes from the decision."""
+    from range_types import Settings as RS, _box
+    rs = RS()
+    i_a, i_b = rt.index.searchsorted(a), rt.index.searchsorted(b)
+    H, L = bars["high"].to_numpy(float), bars["low"].to_numpy(float)
+    C = bars["close"].to_numpy(float)
+    t_min = ((rt.index - when) / pd.Timedelta("1min")).to_numpy()
+    closed = t_min + tfmin <= 0                                  # candles closed by the decision
+    out = []
+    for name in RANGE_NAMES:
+        f = rt[name].to_numpy()
+        top, bot = rt[f"{name}_top"].to_numpy(float), rt[f"{name}_bottom"].to_numpy(float)
+        dr = rt[f"{name}_dir"].to_numpy() if name != "wyckoff" else np.zeros(len(f), int)
+        k = i_a
+        while k < i_b:
+            if f[k] != 1:
+                k += 1
+                continue
+            j = k                                                # the run: same direction (same frozen box for wyckoff)
+            while j + 1 < len(f) and f[j + 1] == 1 and dr[j + 1] == dr[k] and                     (name != "wyckoff" or (top[j + 1] == top[k] and bot[j + 1] == bot[k])):
+                j += 1
+            if name == "pause":
+                start = max(k - rs.PAUSE_MIN_BARS, 0)
+            elif name == "wyckoff":
+                start = k - rs.WY_LENGTHS[0] + 1
+                for n in rs.WY_LENGTHS:                          # the window range_types found it with
+                    if k + 1 - n >= 0 and _box(H, L, C, atr_, k + 1 - n, k + 1, rs) is not None:
+                        start = k + 1 - n
+                        break
+            else:                                                # the staircase begins at its first swing low
+                ref, arr = (bot[k], L) if dr[k] == 1 else (top[k], H)
+                start = k
+                for q in range(k, max(k - 400, -1), -1):
+                    if abs(arr[q] - ref) < 1e-9:
+                        start = q
+                        break
+            liq = rt["pause_liq"].to_numpy(float) if name == "pause" else None
+            swept = rt["pause_swept"].to_numpy() if name == "pause" else None
+
+            def box(e, v):
+                d = dict(k=name, d=int(dr[e]), s=int(t_min[max(start, 0)]), e=int(t_min[e] + tfmin),
+                         top=num(top[e], digits), bot=num(bot[e], digits), v=v)
+                if liq is not None:
+                    d["liq"], d["sw"] = num(liq[e], digits), int(swept[e])
+                return d
+            if closed[j]:
+                out.append(box(j, 0))
+            elif closed[k]:
+                last = k + int(np.searchsorted(~closed[k:j + 1], True)) - 1   # the last closed candle of the run
+                out.append(box(last, 1))
+                out.append(box(j, 2))
+            else:
+                out.append(box(j, 2))
+            k = j + 1
+    return out
+
+
 def last_exit(bot, alt, options, when):
     """Minutes from the decision to the last exit among the bot's trade and every other choice."""
     xs = [bot.get("exit")] + ([alt.get("exit")] if alt else []) + [z[k].get("exit") for z in options for k in ("sniper", "momentum")]
@@ -338,6 +418,9 @@ def main():
     z = z[z["type"].str.endswith(("_ob", "_fvg"))].reset_index(drop=True)
     times = df.index.to_numpy()
     frames = {k: (df if r is None else resample(df, r)) for k, r in RULES.items()}
+    ranges = range_frames(df, args.prices or os.path.join(ROOT, "data", "XAUUSD_1m.csv"))
+    from smcml.detectors import atr as atr_fn
+    atrs = {k: atr_fn(*(frames[k][c].to_numpy(float) for c in ("high", "low", "close")), 14) for k in RULES}
     digits = max(0, 5 - int(math.log10(max(float(df["close"].median()), 1))))
 
     cases = []
@@ -401,6 +484,11 @@ def main():
         c["bars"] = {k: candles(frames[k], when - pd.Timedelta(BEFORE[k]),
                                 when + min(max(pd.Timedelta(AFTER[k][0]), end + 20 * pd.Timedelta(RULES[k] or "1min")),
                                            pd.Timedelta(AFTER[k][1])), when, digits) for k in BEFORE}
+        c["ranges"] = {}
+        for tk in BEFORE:
+            a_ = when - pd.Timedelta(BEFORE[tk]) * 1.5
+            b_ = when + pd.Timedelta(minutes=(sum(c["bars"][tk]["t"]) if c["bars"][tk]["t"] else 0) + 1)
+            c["ranges"][tk] = range_boxes(ranges[tk], frames[tk], atrs[tk], a_, b_, when, TFMIN_OF[tk], digits)
         if (k + 1) % 50 == 0:
             print(f"  {k + 1} cases")
 
