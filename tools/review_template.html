@@ -11,7 +11,7 @@
   --up: #089981; --down: #f23645; --entry: #2962ff; --stop: #f23645; --target: #089981; --poi: rgba(255,152,0,.16);
   --poi-line: #e08600; --opt: rgba(124,77,255,.13); --opt-line: #7c4dff; --grid: #eef1f6; --now: #8a93a6;
   --ok: #089981; --no: #f23645; --sel: #2962ff; --hide: rgba(120,130,150,.10); --label-bg: rgba(255,255,255,.86);
-  --cross: #9598a1; --cross-bg: #363a45;
+  --cross: #9598a1; --cross-bg: #363a45; --pos-tp: rgba(8,153,129,.16); --pos-sl: rgba(242,54,69,.15);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -19,7 +19,7 @@
     --up: #26a69a; --down: #ef5350; --entry: #2962ff; --stop: #ef5350; --target: #26a69a; --poi: rgba(255,167,38,.15);
     --poi-line: #ffa726; --opt: rgba(149,117,255,.15); --opt-line: #9575ff; --grid: #1c202b; --now: #5d6373;
     --ok: #26a69a; --no: #ef5350; --sel: #2962ff; --hide: rgba(255,255,255,.035); --label-bg: rgba(19,23,34,.86);
-    --cross: #758096; --cross-bg: #4a5163;
+    --cross: #758096; --cross-bg: #4a5163; --pos-tp: rgba(38,166,154,.20); --pos-sl: rgba(239,83,80,.18);
   }
 }
 :root[data-theme="dark"] {
@@ -27,7 +27,7 @@
   --up: #26a69a; --down: #ef5350; --entry: #2962ff; --stop: #ef5350; --target: #26a69a; --poi: rgba(255,167,38,.15);
   --poi-line: #ffa726; --opt: rgba(149,117,255,.15); --opt-line: #9575ff; --grid: #1c202b; --now: #5d6373;
   --ok: #26a69a; --no: #ef5350; --sel: #2962ff; --hide: rgba(255,255,255,.035); --label-bg: rgba(19,23,34,.86);
-  --cross: #758096; --cross-bg: #4a5163;
+  --cross: #758096; --cross-bg: #4a5163; --pos-tp: rgba(38,166,154,.20); --pos-sl: rgba(239,83,80,.18);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
@@ -43,7 +43,8 @@ header h1 { font-size: 15px; margin: 0; font-weight: 700; }
 #info { padding: 8px 12px 0; font-size: 13.5px; line-height: 1.45; }
 #info b { font-weight: 700; }
 #info .muted { color: var(--muted); }
-#charts { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; padding: 6px 8px; min-height: 0; }
+#main { flex: 1; display: flex; gap: 6px; padding: 6px 8px; min-height: 0; }
+#chart { flex: 1; }
 .pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .phead { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-bottom: 1px solid var(--line); font-size: 12.5px; min-height: 32px; }
 .phead > b { padding: 0 4px; }
@@ -55,14 +56,19 @@ header h1 { font-size: 15px; margin: 0; font-weight: 700; }
 .ohlc b { color: var(--ink); font-weight: 600; }
 .reset { height: 26px; width: 30px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; }
 .pbody { position: relative; flex: 1; min-height: 200px; }
-.pbody canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: pan-y; cursor: crosshair; display: block; }
+.pbody canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; display: block; }
+.pbtn { height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--ink); cursor: pointer; font-size: 12px; white-space: nowrap; }
+#autoshow { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer; }
 
 #legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); padding: 0 12px 4px; }
+.shelp { display: none; }
 #legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
-#result { margin: 0 12px; font-size: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: none; }
+#result { flex: 0 0 430px; overflow: auto; font-size: 12.5px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: none; }
 #result.on { display: block; }
 #result table { border-collapse: collapse; width: 100%; }
-#result td, #result th { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--grid); }
+#result td, #result th { padding: 4px 5px; text-align: left; border-bottom: 1px solid var(--grid); vertical-align: top; }
+#result td small { display: block; color: var(--muted); font-size: 11px; font-family: inherit; }
+#result td:last-child { white-space: nowrap; text-align: right; } #result .foot { color: var(--muted); font-size: 11px; margin-top: 4px; }
 #result .pos { color: var(--ok); font-weight: 700; } #result .neg { color: var(--no); font-weight: 700; }
 footer { background: var(--surface); border-top: 1px solid var(--line); padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -81,11 +87,14 @@ footer { background: var(--surface); border-top: 1px solid var(--line); padding:
 .hint { font-size: 12px; color: var(--muted); align-self: center; }
 kbd { font-family: inherit; font-size: 10.5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; margin-left: 4px; color: var(--muted); }
 .big.chosen kbd { color: #e8eefc; border-color: #9db8ec; }
+@media (max-width: 1100px) { #main { flex-direction: column; } #chart { flex: 1 1 auto; } #result { flex: none; } }
 @media (max-width: 760px) {
+  .lhelp { display: none; } .shelp { display: inline; }
+  #autoshow { font-size: 0; } #autoshow::after { content: "outcome after I answer"; font-size: 12px; }
   html, body { height: auto; min-height: 100%; }
-  #charts { flex: none; }
-  #charts { grid-template-columns: 1fr; padding: 6px 4px; }
-  .pbody { flex: none; height: 330px; }
+  #main { flex: none; flex-direction: column; padding: 6px 4px; }
+  #result { flex: none; }
+  .pbody { flex: none; height: 62vh; min-height: 380px; }
   .ohlc { font-size: 10.5px; } .tfb { min-width: 34px; padding: 0 6px; }
   footer { position: static; }
   #reasons { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -122,21 +131,28 @@ footer { padding: 6px 10px 8px; gap: 6px; }
   <h1>Bot trade review</h1>
   <div id="prog"><div></div></div>
   <span id="count"></span>
+  <label id="autoshow" title="After you answer, the case stays on screen with the outcome; Next moves on">
+    <input type="checkbox" id="autoshowbox"> show the outcome after I answer</label>
   <button class="hbtn" id="theme" title="Light / dark">◐</button>
   <button class="hbtn" id="export" title="Download your answers as CSV">Export answers</button>
 </header>
 <div id="info"></div>
 <div id="legend">
-  <span><i style="background:var(--entry)"></i>bot entry</span><span><i style="background:var(--stop)"></i>bot stop</span>
-  <span><i style="background:var(--target)"></i>target</span><span><i style="background:var(--poi-line)"></i>bot's POI</span>
-  <span><i style="background:var(--opt-line)"></i>deeper POI 1·2·3</span><span>▲ the candle that formed the zone</span>
-  <span>scroll / pinch = zoom · drag = move · double-click = reset</span>
+  <span><i style="background:var(--pos-tp);height:10px;border:1px solid var(--up)"></i>target zone</span>
+  <span><i style="background:var(--pos-sl);height:10px;border:1px solid var(--down)"></i>stop zone</span>
+  <span><i style="background:var(--poi-line)"></i>bot's POI</span><span><i style="background:var(--opt-line)"></i>deeper POI 1·2·3</span>
+  <span>▲ the candle that formed the zone</span>
+  <span class="lhelp">drag the box = shift it · drag a line = move that level · drag the right edge = width</span>
+  <span class="lhelp">scroll / pinch = zoom · drag the chart = pan · drag the price scale = stretch · double-click = reset</span>
+  <span class="shelp">drag the box or a line to move it · pinch = zoom · ⟲ = reset</span>
 </div>
-<div id="charts">
-  <div class="pane" id="pane-ctx"><div class="phead"><b>Context</b><span class="tfs"></span><span class="ohlc mono"></span><button class="reset" title="Reset the view (or double-click the chart)">⟲</button></div><div class="pbody"><canvas></canvas></div></div>
-  <div class="pane" id="pane-ent"><div class="phead"><b>Entry</b><span class="tfs"></span><span class="ohlc mono"></span><button class="reset" title="Reset the view (or double-click the chart)">⟲</button></div><div class="pbody"><canvas></canvas></div></div>
+<div id="main">
+  <div class="pane" id="chart"><div class="phead"><span class="tfs"></span><span class="ohlc mono"></span>
+    <button class="pbtn" id="lvreset" title="Put the entry, stop and target back where the bot had them">↺ bot's levels</button>
+    <button class="reset" title="Reset the view (or double-click the chart)">⟲</button></div>
+    <div class="pbody"><canvas></canvas></div></div>
+  <div id="result"></div>
 </div>
-<div id="result"></div>
 <footer>
   <div class="row" id="reasons"></div>
   <div class="row" id="answers"></div>
@@ -144,7 +160,7 @@ footer { padding: 6px 10px 8px; gap: 6px; }
     <button class="nav" id="back">◀ Back<kbd>Z</kbd></button>
     <button class="nav" id="fwd">Next ▶<kbd>→</kbd></button>
     <button class="nav" id="reveal">Show what happened<kbd>H</kbd></button>
-    <span class="hint">Optional reason first, then one answer: S · A · B, or a deeper POI with the entry you'd use there (1·2·3 sniper, 4·5·6 momentum).</span>
+    <span class="hint">Optional reason, then one answer: S · A · B, or a deeper POI (1·2·3 sniper, 4·5·6 momentum). Enter / → = next case. [ ] = timeframe.</span>
   </div>
 </footer>
 <div id="done"><div><b>All cases answered.</b><br>Press <b>Export answers</b> to download <span class="mono">review_answers.csv</span>,
@@ -164,15 +180,34 @@ let reveal = false, picked = new Set();
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const fmt = (x, d = META.digits) => x == null ? "–" : Number(x).toFixed(d);
 
-// ---------------------------------------------------------------- the charts: two panes (context, entry), like a trading terminal
+// ---------------------------------------------------------------- the chart: one window, five timeframes, a position tool
+const TFS = ["H4", "H1", "M15", "M5", "M1"];
 const TFMIN = { H4: 240, H1: 60, M15: 15, M5: 5, M1: 1 };
-const DEFAULT_N = { H4: 90, H1: 100, M15: 110, M5: 120, M1: 120 };     // candles in view by default
-const ROOM = 4;                                                          // blank candles after "now" before you answer
-const PANES = [
-  { key: "ctx", title: "Context", tf: "H1", choices: ["H4", "H1", "M15"], view: null, mouse: null },
-  { key: "ent", title: "Entry", tf: "M1", choices: ["M15", "M5", "M1"], view: null, mouse: null },
-];
-let caseShown = -1;
+const DEFAULT_N = { H4: 100, H1: 110, M15: 120, M5: 130, M1: 130 };   // candles in the window by default
+const ROOM = 0.2;                                                      // share of the window after "now" while the outcome is hidden
+const AXIS = 76, PADT = 8, PADB = 22;
+const CH = { tf: "M5", view: null, mouse: null, ylock: null, act: null, geo: null };
+try { const t = localStorage.getItem("review-tf"); if (TFMIN[t]) CH.tf = t; } catch (e) {}
+let caseShown = -1, revShown = null;
+const edits = {};                                                      // case -> moved levels not yet saved with an answer
+
+function unpack() {                                                    // prepare_review.py packs the candles: undo it
+  const f = Math.pow(10, META.digits);
+  for (const c of CASES) for (const tf in c.bars) {
+    const b = c.bars[tf], n = b.t.length; let m = 0, pc = 0;
+    const t = new Array(n), o = new Array(n), h = new Array(n), l = new Array(n), cl = new Array(n);
+    for (let k = 0; k < n; k++) {
+      m += b.t[k]; t[k] = m; o[k] = (pc + b.open[k]) / f; h[k] = (pc + b.high[k]) / f; l[k] = (pc + b.low[k]) / f;
+      pc += b.close[k]; cl[k] = pc / f;
+    }
+    c.bars[tf] = { t, open: o, high: h, low: l, close: cl };
+  }
+}
+const T0 = c => Date.parse(c.decided.replace(" ", "T") + ":00Z");
+function minOf(c, s) { if (!s || /None|NaT|null/.test(s)) return null; const v = Date.parse(String(s).replace(" ", "T") + ":00Z"); return isNaN(v) ? null : Math.round((v - T0(c)) / 60000); }
+function clockOf(c, m) { return new Date(T0(c) + m * 60000).toISOString().slice(5, 16).replace("T", " "); }
+const kOf = (b, tf, m) => { const k = b.t.findIndex(t => t + tf > m); return k < 0 ? b.t.length : k; };   // the candle holding minute m
+const round = v => Number(v.toFixed(META.digits));
 
 function zonesOf(c) {
   const z = [];
@@ -182,56 +217,102 @@ function zonesOf(c) {
                                        fill: css("--opt"), line: css("--opt-line"), label: `${k + 1} · ${o.tf} ${o.kind}` }));
   return z;
 }
-function clockOf(c, m) {
-  const d = new Date(c.decided.replace(" ", "T") + ":00Z"); d.setUTCMinutes(d.getUTCMinutes() + m);
-  return d.toISOString().slice(5, 16).replace("T", " ");
-}
-const kOf = (b, tf, m) => { const k = b.t.findIndex(t => t + tf > m); return k < 0 ? b.t.length : k; };   // candle holding minute m
 
-function defaultView(p, c) {
-  const b = c.bars[p.tf], tf = TFMIN[p.tf], nAll = b.t.length, kNow = kOf(b, tf, 0);
-  let n = Math.max(45, Math.round(DEFAULT_N[p.tf] * Math.min(1, (p.canvas.clientWidth || 700) / 650)));   // fewer on a phone
-  if (p.key === "ctx") {                                                 // the earliest POI's formation candle in view
-    const fs = zonesOf(c).map(z => z.f).filter(f => f != null && f >= b.t[0]);
-    if (fs.length) n = Math.max(n, kNow - kOf(b, tf, Math.min(...fs)) + 10);
+// ---------------------------------------------------------------- the position: the bot's levels, or yours once you move them
+const botPos = c => ({ entry: c.entry, stop: c.stop, target: c.target, start: null, end: null });
+function posOf(c) { const a = answers[c.case]; return edits[c.case] || (a && a.pos) || botPos(c); }
+const moved = (c, p) => p.entry !== c.entry || p.stop !== c.stop || p.target !== c.target || p.start != null;
+function setPos(c, p) { edits[c.case] = p; const a = answers[c.case]; if (a) { a.pos = moved(c, p) ? p : null; save(); } }
+function simulate(c, p) {
+  // the position against the candles after its start (finest candles first): the fill, then the stop or the target,
+  // whichever comes first; a candle that holds both counts as the stop
+  const d = c.dir === "long" ? 1 : -1, risk = Math.abs(p.entry - p.stop);
+  let fill = null, from = p.start != null ? p.start : 0, mode = null;
+  for (const tf of ["M1", "M5", "M15", "H1", "H4"]) {
+    const b = c.bars[tf]; if (!b || !b.t.length) continue;
+    let k = b.t.findIndex(t => t >= from); if (k < 0) continue;
+    for (; k < b.t.length; k++) {
+      const hi = b.high[k], lo = b.low[k];
+      if (fill == null) {
+        if (mode == null) mode = d * (b.open[k] - p.entry) >= 0 ? "limit" : "stop";
+        const hit = (mode === "limit") === (d > 0) ? lo <= p.entry : hi >= p.entry;
+        if (!hit) continue;
+        fill = b.t[k];
+      }
+      const sl = d > 0 ? lo <= p.stop : hi >= p.stop, tp = d > 0 ? hi >= p.target : lo <= p.target;
+      if (sl || tp) return { fill, exit: b.t[k], exitTf: tf, outcome: sl ? "stop" : "target", exitPrice: sl ? p.stop : p.target,
+                             R: sl ? -1 : Math.abs(p.target - p.entry) / risk, Rc: (sl ? -1 : Math.abs(p.target - p.entry) / risk) - META.cost / risk };
+    }
+    from = b.t[b.t.length - 1] + TFMIN[tf];
   }
-  const after = reveal ? Math.round(n * 0.7) : ROOM;
-  const k1 = Math.min(kNow + after, reveal ? nAll : kNow + ROOM);
-  return { k0: Math.max(-2, k1 - n - (reveal ? after : 0)), k1 };
+  return { fill, exit: null, outcome: fill == null ? "not filled" : "open", R: 0, Rc: 0 };
 }
-function clampView(p, c, v) {
-  const b = c.bars[p.tf], kNow = kOf(b, TFMIN[p.tf], 0), maxK = reveal ? b.t.length + 2 : kNow + ROOM;
-  let n = Math.max(15, Math.min(v.k1 - v.k0, b.t.length + ROOM));
+function outcomeOf(c, p) {
+  if (moved(c, p)) return simulate(c, p);
+  const o = c.bot.outcome;
+  return { fill: minOf(c, c.bot.fill), exit: minOf(c, c.bot.exit), outcome: o, R: c.bot.R, Rc: c.bot.R_after_cost,
+           exitPrice: o === "stop" ? c.stop : o === "target" ? c.target : null };
+}
+function choiceTrade(c) {                                              // the trade your answer stands for, if it is not the bot's
+  const a = answers[c.case]; if (!a) return null;
+  let t = null;
+  if (a.choice === "bot_other") t = c.alt;
+  const m = /^poi(\d)_(sniper|momentum)$/.exec(a.choice); if (m && c.options[+m[1] - 1]) t = c.options[+m[1] - 1][m[2]];
+  if (!t || t.entry == null || !t.fill) return null;
+  return { entry: t.entry, stop: t.stop, target: t.target, fill: minOf(c, t.fill), exit: minOf(c, t.exit), status: t.status };
+}
+
+// ---------------------------------------------------------------- the window
+function defaultView(c) {
+  const b = c.bars[CH.tf], tf = TFMIN[CH.tf], kNow = kOf(b, tf, 0), n = DEFAULT_N[CH.tf];
+  if (!reveal) { const room = Math.round(n * ROOM); return { k0: kNow + room - n, k1: kNow + room }; }
+  const o = outcomeOf(c, posOf(c)), kx = o.exit != null ? kOf(b, tf, o.exit) : kNow;
+  const k0 = kNow - Math.round(n * 0.55), k1 = Math.max(kNow + Math.round(n * 0.45), Math.min(kx + 12, k0 + 400));
+  return { k0, k1 };
+}
+function centredView(c, m) {                                           // a new timeframe, around the same moment
+  const b = c.bars[CH.tf], n = DEFAULT_N[CH.tf], kc = kOf(b, TFMIN[CH.tf], m);
+  return { k0: kc - n / 2, k1: kc + n / 2 };
+}
+function clampView(c, v) {
+  const b = c.bars[CH.tf], kNow = kOf(b, TFMIN[CH.tf], 0);
+  let n = Math.max(12, Math.min(v.k1 - v.k0, 1600));
+  const maxK = reveal ? b.t.length + n * 0.25 : kNow + n * ROOM;
   let k1 = Math.min(v.k1, maxK), k0 = k1 - n;
   if (k0 < -n * 0.5) { k0 = -n * 0.5; k1 = k0 + n; }
   return { k0, k1 };
 }
 
-function drawPane(p, c) {
-  const cv = p.canvas, dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+function drawChart(c) {
+  const cv = CH.canvas, dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (!W || !H) return;
   cv.width = W * dpr; cv.height = H * dpr;
   const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
-  const b = c.bars[p.tf], tf = TFMIN[p.tf];
+  const b = c.bars[CH.tf], tf = TFMIN[CH.tf];
   if (!b || !b.t.length) return;
-  if (p.vrev !== reveal || !p.view) { p.view = defaultView(p, c); p.vrev = reveal; }
-  p.view = clampView(p, c, p.view);
-  const { k0, k1 } = p.view, n = k1 - k0, nAll = b.t.length, kNow = kOf(b, tf, 0);
-  const padR = 72, padT = 8, padB = 22, plotW = W - padR, plotH = H - padT - padB, slot = plotW / n;
-  const X = k => (k - k0 + 0.5) * slot;
+  if (!CH.view) CH.view = defaultView(c);
+  CH.view = clampView(c, CH.view);
+  const { k0, k1 } = CH.view, n = k1 - k0, nAll = b.t.length, kNow = kOf(b, tf, 0);
+  const plotW = W - AXIS, plotH = H - PADT - PADB, slot = plotW / n;
+  const X = k => (k - k0 + 0.5) * slot, Kx = x => k0 + x / slot;
   const drawn = k => k >= 0 && k < nAll && (reveal || b.t[k] + tf <= 0);
   const ka = Math.max(0, Math.floor(k0)), kb = Math.min(nAll, Math.ceil(k1));
-  // price scale: the candles in view, the entry and the stop; the target and POIs only if they are near
-  let lo = Infinity, hi = -Infinity;
-  for (let k = ka; k < kb; k++) if (drawn(k)) { lo = Math.min(lo, b.low[k]); hi = Math.max(hi, b.high[k]); }
-  if (!isFinite(lo)) return;
-  for (const v of [c.entry, c.stop]) if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
-  const span0 = hi - lo || 1, zones = zonesOf(c);
-  const near = v => v != null && v > lo - span0 * 0.6 && v < hi + span0 * 0.6;
-  if (near(c.target)) { lo = Math.min(lo, c.target); hi = Math.max(hi, c.target); }
-  if (p.key === "ctx") for (const z of zones) if (near(z.top) && near(z.bottom)) { lo = Math.min(lo, z.bottom); hi = Math.max(hi, z.top); }
-  const pad = (hi - lo) * 0.07; lo -= pad; hi += pad;
-  const Y = v => padT + (hi - v) / (hi - lo) * plotH, P = y => hi - (y - padT) / plotH * (hi - lo);
-  // grid: prices and times
+  const pos = posOf(c), out = outcomeOf(c, pos), zones = zonesOf(c), alt = reveal ? choiceTrade(c) : null;
+  // the price scale: the candles in the window and the position's entry and stop; the target and zones if near
+  let lo, hi;
+  if (CH.ylock) ({ lo, hi } = CH.ylock);
+  else {
+    lo = Infinity; hi = -Infinity;
+    for (let k = ka; k < kb; k++) if (drawn(k)) { lo = Math.min(lo, b.low[k]); hi = Math.max(hi, b.high[k]); }
+    if (!isFinite(lo)) { lo = Math.min(pos.entry, pos.stop); hi = Math.max(pos.entry, pos.stop); }
+    for (const v of [pos.entry, pos.stop]) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    const span0 = hi - lo || 1, near = v => v != null && v > lo - span0 * 0.6 && v < hi + span0 * 0.6;
+    if (near(pos.target)) { lo = Math.min(lo, pos.target); hi = Math.max(hi, pos.target); }
+    if (tf >= 15) for (const z of zones) if (near(z.top) && near(z.bottom)) { lo = Math.min(lo, z.bottom); hi = Math.max(hi, z.top); }
+    const pad = (hi - lo) * 0.07; lo -= pad; hi += pad;
+  }
+  const Y = v => PADT + (hi - v) / (hi - lo) * plotH, P = y => hi - (y - PADT) / plotH * (hi - lo);
+  // grid
   g.font = "11px ui-monospace, Menlo, Consolas, monospace"; g.textBaseline = "middle"; g.lineWidth = 1;
   const step = niceStep((hi - lo) / Math.max(3, Math.round(plotH / 70)));
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
@@ -241,63 +322,87 @@ function drawPane(p, c) {
   const every = Math.max(1, Math.ceil(110 / slot));
   g.textAlign = "center";
   for (let k = Math.ceil(ka / every) * every; k < kb; k += every) {
-    const x = Math.round(X(k)) + .5; g.strokeStyle = css("--grid"); g.beginPath(); g.moveTo(x, padT); g.lineTo(x, padT + plotH); g.stroke();
+    const x = Math.round(X(k)) + .5; g.strokeStyle = css("--grid"); g.beginPath(); g.moveTo(x, PADT); g.lineTo(x, PADT + plotH); g.stroke();
     if (x > 40 && x < plotW - 40) { g.fillStyle = css("--muted"); g.fillText(clockOf(c, b.t[k]), x, H - 10); }
   }
   g.textAlign = "start";
-  g.save(); g.beginPath(); g.rect(0, padT, plotW, plotH); g.clip();
-  // POI boxes: from the candle that formed them, to where price used them up (or to now)
+  g.save(); g.beginPath(); g.rect(0, PADT, plotW, plotH); g.clip();
+  // zones, from the candle that formed them to where they were used (or to now)
   const xNow = (kNow - k0) * slot, labels = [];
   for (const z of zones) {
     if (z.top == null || z.bottom == null) continue;
     const kf = z.f == null ? -1e9 : kOf(b, tf, z.f);
     if (kf >= k1 || (!reveal && kf >= kNow)) continue;
-    const early = kf < k0;
-    const x0 = early ? 0 : (kf - k0) * slot;
+    const early = kf < k0, x0 = early ? 0 : (kf - k0) * slot;
     const ku = z.u != null && (reveal || z.u <= 0) ? kOf(b, tf, z.u) : null;
     const x1 = ku != null ? Math.max((ku - k0 + 1) * slot, x0 + slot) : (reveal ? plotW : Math.max(xNow, x0 + slot));
     const y1 = Y(z.top), y2 = Y(z.bottom);
     g.fillStyle = z.fill; g.fillRect(x0, y1, x1 - x0, y2 - y1);
-    g.strokeStyle = z.line; g.lineWidth = 1; g.globalAlpha = .9; g.strokeRect(x0 + .5, y1 + .5, x1 - x0 - 1, y2 - y1); g.globalAlpha = 1;
+    g.strokeStyle = z.line; g.globalAlpha = .9; g.strokeRect(x0 + .5, y1 + .5, x1 - x0 - 1, y2 - y1); g.globalAlpha = 1;
     labels.push({ z, x0, y1, y2, early, kf });
   }
-  // momentum: the M5 pause range the bot broke out of (a band: the file has its prices, not its start)
-  if (p.key === "ent" && c.pause && c.pause.top != null) {
+  if (c.pause && c.pause.top != null && tf <= 15) {                    // momentum: the M5 pause range (prices only, no start)
     const y1 = Y(c.pause.top), y2 = Y(c.pause.bottom), xe = reveal ? plotW : xNow;
     g.fillStyle = css("--hide"); g.fillRect(0, y1, xe, y2 - y1);
     g.strokeStyle = css("--muted"); g.setLineDash([2, 3]); g.strokeRect(.5, y1 + .5, xe - 1, y2 - y1); g.setLineDash([]);
     labels.push({ z: { label: "M5 pause range", line: css("--muted"), top: c.pause.top, bottom: c.pause.bottom }, x0: 0, y1, y2, early: true, kf: -1, pause: true });
   }
-  // the hidden future
-  if (!reveal && xNow < plotW) {
-    g.fillStyle = css("--hide"); g.fillRect(xNow, padT, plotW - xNow, plotH);
+  if (!reveal && xNow < plotW) { g.fillStyle = css("--hide"); g.fillRect(xNow, PADT, plotW - xNow, plotH); }
+  g.strokeStyle = css("--now"); g.setLineDash([4, 4]); g.beginPath(); g.moveTo(Math.round(xNow) + .5, PADT); g.lineTo(Math.round(xNow) + .5, PADT + plotH); g.stroke(); g.setLineDash([]);
+  // the position box, under the candles like TradingView's long / short position
+  const startM = pos.start != null ? pos.start : (reveal && out.fill != null ? out.fill : 0);
+  const kS = kOf(b, tf, startM);
+  const kE = pos.end != null ? Math.max(kS, kOf(b, tf, pos.end)) : reveal && out.exit != null ? Math.max(kS, kOf(b, tf, out.exit))
+           : reveal ? kS + 30 : Math.max(kS + 3, Math.ceil(k1) - 1);
+  const xs = (kS - k0) * slot, xe = (kE - k0 + 1) * slot, yE = Y(pos.entry), yS = Y(pos.stop), yT = Y(pos.target);
+  const drawBox = (q, x0, x1, faint) => {
+    const ye = Y(q.entry), ys = Y(q.stop), yt = Y(q.target);
+    g.globalAlpha = faint ? 0.55 : 1;
+    g.fillStyle = css("--pos-tp"); g.fillRect(x0, Math.min(ye, yt), x1 - x0, Math.abs(yt - ye));
+    g.fillStyle = css("--pos-sl"); g.fillRect(x0, Math.min(ye, ys), x1 - x0, Math.abs(ys - ye));
+    g.lineWidth = 1;
+    g.strokeStyle = css("--up"); g.beginPath(); g.moveTo(x0, yt); g.lineTo(x1, yt); g.stroke();
+    g.strokeStyle = css("--down"); g.beginPath(); g.moveTo(x0, ys); g.lineTo(x1, ys); g.stroke();
+    g.strokeStyle = css("--ink"); g.lineWidth = 1.5; g.beginPath(); g.moveTo(x0, ye); g.lineTo(x1, ye); g.stroke(); g.lineWidth = 1;
+    if (faint) { g.strokeStyle = css("--opt-line"); g.setLineDash([5, 3]); g.strokeRect(x0 + .5, Math.min(yt, ys), x1 - x0, Math.abs(ys - yt)); g.setLineDash([]); }
+    g.globalAlpha = 1;
+  };
+  drawBox(pos, xs, xe, false);
+  if (reveal && out.fill != null) {                                    // what happened: from the fill to the exit
+    const kf = kOf(b, tf, out.fill), kx = out.exit != null ? kOf(b, tf, out.exit) : Math.min(nAll - 1, Math.ceil(k1));
+    const px = out.exitPrice != null ? out.exitPrice : b.close[Math.min(kx, nAll - 1)];
+    const x0 = (kf - k0) * slot, x1 = (kx - k0 + 1) * slot, win = (px - pos.entry) * (c.dir === "long" ? 1 : -1) > 0;
+    g.fillStyle = css(win ? "--pos-tp" : "--pos-sl"); g.fillRect(x0, Math.min(yE, Y(px)), x1 - x0, Math.abs(Y(px) - yE));
+    g.strokeStyle = css("--ink"); g.setLineDash([4, 3]); g.beginPath(); g.moveTo(x0, yE); g.lineTo(x1, Y(px)); g.stroke(); g.setLineDash([]);
   }
-  g.strokeStyle = css("--now"); g.setLineDash([4, 4]); g.beginPath(); g.moveTo(Math.round(xNow) + .5, padT); g.lineTo(Math.round(xNow) + .5, padT + plotH); g.stroke(); g.setLineDash([]);
+  if (alt) {                                                           // your answer's trade, if it is another one
+    const ka2 = kOf(b, tf, alt.fill), kx2 = alt.exit != null ? kOf(b, tf, alt.exit) : ka2 + 30;
+    drawBox(alt, (ka2 - k0) * slot, (kx2 - k0 + 1) * slot, true);
+  }
   // candles
   const bw = Math.max(1, Math.min(slot * 0.72, 22));
   for (let k = ka; k < kb; k++) {
     if (!drawn(k)) continue;
-    const o = b.open[k], h = b.high[k], l = b.low[k], cl = b.close[k], up = cl >= o;
-    const col = up ? css("--up") : css("--down"), x = Math.round(X(k)) + .5;
-    g.globalAlpha = b.t[k] + tf <= 0 ? 1 : 0.55;
+    const o = b.open[k], h = b.high[k], l = b.low[k], cl = b.close[k], col = cl >= o ? css("--up") : css("--down"), x = Math.round(X(k)) + .5;
+    g.globalAlpha = b.t[k] + tf <= 0 ? 1 : 0.8;
     g.strokeStyle = col; g.beginPath(); g.moveTo(x, Y(h)); g.lineTo(x, Y(l)); g.stroke();
     const yb = Y(Math.max(o, cl)), hb = Math.max(1, Y(Math.min(o, cl)) - yb);
     g.fillStyle = col; g.fillRect(Math.round(x - bw / 2), yb, Math.max(1, Math.round(bw)), hb);
   }
   g.globalAlpha = 1;
-  // labels and the ▲ under each POI's formation candle, on top of the candles
+  // zone labels and the ▲ under each zone's formation candle
   const placed = [];
   g.font = "600 11.5px -apple-system, Segoe UI, Roboto, sans-serif";
   for (const L of labels) {
-    if (!L.early && L.y2 > padT && L.y2 < padT + plotH) {
+    if (!L.early && L.y2 > PADT && L.y2 < PADT + plotH) {
       const xm = (L.kf - k0 + 0.5) * slot; g.fillStyle = L.z.line; g.beginPath();
       g.moveTo(xm, L.y2 + 3); g.lineTo(xm - 5, L.y2 + 11); g.lineTo(xm + 5, L.y2 + 11); g.closePath(); g.fill();
     }
-    const below = L.y1 > padT + plotH, above = L.y2 < padT;
+    const below = L.y1 > PADT + plotH, above = L.y2 < PADT;
     const text = (below ? "↓ " : above ? "↑ " : L.early && !L.pause ? "◀ " : "") + L.z.label +
       (below || above ? ` ${fmt(L.z.bottom)}–${fmt(L.z.top)}` : "") + (L.early && !L.pause && !below && !above ? ` · formed ${String(L.z.formed || "").slice(5)}` : "");
     const w = g.measureText(text).width + 8;
-    let x = Math.max(2, Math.min(L.x0 + 2, plotW - w - 4)), y = Math.min(Math.max(L.y1 + 2, padT + 2), padT + plotH - 16);
+    let x = Math.max(2, Math.min(L.x0 + 2, plotW - w - 4)), y = Math.min(Math.max(L.y1 + 2, PADT + 2), PADT + plotH - 16);
     for (let t = 0; t < 8; t++) {
       const hit = placed.find(r => Math.abs(r.y - y) < 16 && x < r.x + r.w && x + w > r.x);
       if (!hit) break; y = below ? hit.y - 16 : hit.y + 16;
@@ -306,8 +411,7 @@ function drawPane(p, c) {
     g.fillStyle = css("--label-bg"); g.fillRect(x, y, w, 15);
     g.fillStyle = L.z.line; g.textBaseline = "top"; g.fillText(text, x + 4, y + 2); g.textBaseline = "middle";
   }
-  // equal lows / highs at the setup (entry timeframes)
-  if (tf <= 5 && c.eq && c.eq.lows.length) {
+  if (tf <= 5 && c.eq && c.eq.lows.length) {                           // equal lows / highs at the setup
     g.font = "bold 12px -apple-system, Segoe UI, sans-serif"; g.textAlign = "center";
     for (const e of c.eq.lows) {
       const k = kOf(b, tf, e.m); if (k < ka || k >= kb) continue;
@@ -317,87 +421,150 @@ function drawPane(p, c) {
     }
     g.textAlign = "start";
   }
-  g.restore();
-  // the bot's levels, with tags on the price axis
-  const level = (v, col, label, dash) => {
-    if (v == null) return;
-    let y = Y(v), off = "";
-    if (y < padT) { y = padT + 6; off = "↑"; } else if (y > padT + plotH) { y = padT + plotH - 6; off = "↓"; }
-    g.strokeStyle = col; g.lineWidth = 1.5; g.setLineDash(dash || []); g.beginPath(); g.moveTo(0, y); g.lineTo(plotW, y); g.stroke();
-    g.setLineDash([]); g.lineWidth = 1;
-    g.fillStyle = col; g.fillRect(plotW + 1, y - 9, padR - 2, 18);
-    g.fillStyle = "#fff"; g.font = "bold 10.5px ui-monospace, Menlo, Consolas, monospace";
-    g.fillText(off ? `${label} ${off}` : fmt(v), plotW + 5, y);
+  // the position's labels and handles, on top
+  const risk = Math.abs(pos.entry - pos.stop), rr = Math.abs(pos.target - pos.entry) / risk, mine = moved(c, pos);
+  const tag = (text, x, y, bg) => {
+    g.font = "600 11.5px -apple-system, Segoe UI, Roboto, sans-serif"; const w = g.measureText(text).width + 12;
+    const xx = Math.max(2, Math.min(x - w / 2, plotW - w - 2)), yy = Math.max(PADT + 1, Math.min(y - 9, PADT + plotH - 19));
+    g.fillStyle = bg; g.fillRect(xx, yy, w, 18); g.fillStyle = "#fff"; g.fillText(text, xx + 6, yy + 9.5);
   };
-  level(c.target, css("--target"), "target", [6, 4]);
-  level(c.stop, css("--stop"), "stop");
-  level(c.entry, css("--entry"), "entry");
-  // crosshair, its price and time tags, and the candle's OHLC
-  const m = p.mouse, ohlc = p.ohlcEl;
-  let k = null;
-  if (m && m.x < plotW && m.y > padT && m.y < padT + plotH) {
-    k = Math.floor(k0 + m.x / slot);
-    const xs = Math.round(X(k)) + .5, ys = Math.round(m.y) + .5;
+  g.fillStyle = css("--ink");                                          // handles: the three levels, and the right edge
+  for (const y of [yE, yS, yT]) if (y > PADT && y < PADT + plotH && xs > -6 && xs < plotW) { g.fillStyle = css("--surface"); g.fillRect(xs - 4, y - 4, 8, 8); g.strokeStyle = css("--ink"); g.strokeRect(xs - 3.5, y - 3.5, 7, 7); }
+  if (xe > 0 && xe < plotW) { const yc = (Math.max(Math.min(yT, yS), PADT) + Math.min(Math.max(yT, yS), PADT + plotH)) / 2; g.fillStyle = css("--surface"); g.fillRect(xe - 4, yc - 8, 8, 16); g.strokeStyle = css("--ink"); g.strokeRect(xe - 3.5, yc - 7.5, 7, 15); }
+  const xm = (Math.max(xs, 0) + Math.min(xe, plotW)) / 2, up = c.dir === "long" ? 1 : -1;
+  tag(`Target ${fmt(pos.target)} · ${fmt(Math.abs(pos.target - pos.entry), 2)} · ${rr.toFixed(1)}R${yT < PADT || yT > PADT + plotH ? (yT < PADT ? " ↑" : " ↓") : ""}`, xm, yT - up * 11, css("--up"));
+  tag(`Stop ${fmt(pos.stop)} · ${fmt(risk, 2)}`, xm, yS + up * 11, css("--down"));
+  let mid = `${c.dir === "long" ? "Long" : "Short"} ${fmt(pos.entry)} · RR ${rr.toFixed(1)}${mine ? " · your levels" : ""}`;
+  if (reveal) mid += out.outcome === "stop" ? ` → stop ${out.Rc.toFixed(2)}R` : out.outcome === "target" ? ` → target +${out.Rc.toFixed(2)}R`
+                   : out.outcome === "open" ? " → still open at the end of the data" : " → not filled";
+  tag(mid, xm, yE, css("--cross-bg"));
+  g.restore();
+  // price tags on the axis
+  const level = (v, col, label) => {
+    let y = Y(v), off = "";
+    if (y < PADT) { y = PADT + 9; off = "↑"; } else if (y > PADT + plotH) { y = PADT + plotH - 9; off = "↓"; }
+    g.fillStyle = col; g.fillRect(plotW + 1, y - 9, AXIS - 2, 18);
+    g.fillStyle = "#fff"; g.font = "bold 10.5px ui-monospace, Menlo, Consolas, monospace"; g.fillText(off ? `${label} ${off}` : fmt(v), plotW + 5, y);
+  };
+  level(pos.target, css("--up"), "target"); level(pos.stop, css("--down"), "stop"); level(pos.entry, css("--entry"), "entry");
+  // crosshair and the candle's OHLC
+  const m = CH.mouse; let k = null;
+  if (m && m.x < plotW && m.y > PADT && m.y < PADT + plotH && !CH.act) {
+    k = Math.floor(Kx(m.x));
+    const xc = Math.round(X(k)) + .5, yc = Math.round(m.y) + .5;
     g.strokeStyle = css("--cross"); g.setLineDash([3, 3]);
-    g.beginPath(); g.moveTo(xs, padT); g.lineTo(xs, padT + plotH); g.moveTo(0, ys); g.lineTo(plotW, ys); g.stroke(); g.setLineDash([]);
-    g.fillStyle = css("--cross-bg"); g.fillRect(plotW + 1, ys - 9, padR - 2, 18);
-    g.fillStyle = "#fff"; g.font = "10.5px ui-monospace, Menlo, Consolas, monospace"; g.fillText(fmt(P(m.y)), plotW + 5, ys);
+    g.beginPath(); g.moveTo(xc, PADT); g.lineTo(xc, PADT + plotH); g.moveTo(0, yc); g.lineTo(plotW, yc); g.stroke(); g.setLineDash([]);
+    g.fillStyle = css("--cross-bg"); g.fillRect(plotW + 1, yc - 9, AXIS - 2, 18);
+    g.fillStyle = "#fff"; g.font = "10.5px ui-monospace, Menlo, Consolas, monospace"; g.fillText(fmt(P(m.y)), plotW + 5, yc);
     if (drawn(k)) {
       const tl = clockOf(c, b.t[k]), tw = g.measureText(tl).width + 10;
-      g.fillStyle = css("--cross-bg"); g.fillRect(xs - tw / 2, H - 19, tw, 17);
-      g.fillStyle = "#fff"; g.textAlign = "center"; g.fillText(tl, xs, H - 10); g.textAlign = "start";
+      g.fillStyle = css("--cross-bg"); g.fillRect(xc - tw / 2, H - 19, tw, 17);
+      g.fillStyle = "#fff"; g.textAlign = "center"; g.fillText(tl, xc, H - 10); g.textAlign = "start";
     }
   }
   if (k == null || !drawn(k)) k = Math.min(kNow, nAll) - 1;
-  if (ohlc && k >= 0 && k < nAll && drawn(k)) {
-    const up = b.close[k] >= b.open[k];
-    ohlc.innerHTML = `${clockOf(c, b.t[k])} &nbsp;O <b>${fmt(b.open[k])}</b> H <b>${fmt(b.high[k])}</b> L <b>${fmt(b.low[k])}</b> ` +
-      `C <b style="color:var(${up ? "--up" : "--down"})">${fmt(b.close[k])}</b>`;
+  if (CH.ohlcEl && k >= 0 && k < nAll && drawn(k)) {
+    const upc = b.close[k] >= b.open[k];
+    CH.ohlcEl.innerHTML = `${clockOf(c, b.t[k])} &nbsp;O <b>${fmt(b.open[k])}</b> H <b>${fmt(b.high[k])}</b> L <b>${fmt(b.low[k])}</b> ` +
+      `C <b style="color:var(${upc ? "--up" : "--down"})">${fmt(b.close[k])}</b>`;
   }
+  CH.geo = { plotW, plotH, slot, k0, lo, hi, xs, xe, yE, yS, yT, kS, kE, X, Kx, P, Y };
+  document.getElementById("lvreset").style.visibility = mine ? "visible" : "hidden";
 }
 function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))); const m = x / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; }
 
-function buildPanes() {
-  for (const p of PANES) {
-    const el = document.getElementById(`pane-${p.key}`);
-    p.canvas = el.querySelector("canvas"); p.ohlcEl = el.querySelector(".ohlc");
-    const tfs = el.querySelector(".tfs");
-    for (const tf of p.choices) {
-      const bt = document.createElement("button"); bt.textContent = tf; bt.className = "tfb" + (tf === p.tf ? " on" : "");
-      bt.onclick = () => { p.tf = tf; p.view = null; tfs.querySelectorAll(".tfb").forEach(x => x.classList.toggle("on", x.textContent === tf)); drawPane(p, CASES[i]); };
-      tfs.appendChild(bt);
-    }
-    el.querySelector(".reset").onclick = () => { p.view = null; drawPane(p, CASES[i]); };
-    const cv = p.canvas, pts = new Map();
-    let drag = null, pinch = null;
-    const local = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-    const zoom = (x, f) => {                                               // f > 1: fewer candles (zoom in)
-      const v = p.view, w = cv.clientWidth - 72, n = v.k1 - v.k0, kc = v.k0 + Math.max(0, Math.min(1, x / w)) * n;
-      const n2 = Math.max(15, Math.min(1500, n / f));
-      p.view = { k0: kc - (kc - v.k0) * n2 / n, k1: kc + (v.k1 - kc) * n2 / n };
-    };
-    cv.addEventListener("wheel", e => { e.preventDefault(); if (!p.view) return; zoom(local(e).x, Math.exp(-e.deltaY * 0.0015)); drawPane(p, CASES[i]); }, { passive: false });
-    cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e));
-      if (pts.size === 1) drag = { x: local(e).x, v: { ...p.view } };
-      if (pts.size === 2) { const [a, b2] = [...pts.values()]; pinch = { d: Math.abs(a.x - b2.x) || 1 }; drag = null; } });
-    cv.addEventListener("pointermove", e => {
-      const q = local(e); p.mouse = q;
-      if (pts.has(e.pointerId)) pts.set(e.pointerId, q);
-      if (pinch && pts.size === 2) { const [a, b2] = [...pts.values()], d = Math.abs(a.x - b2.x) || 1; zoom((a.x + b2.x) / 2, d / pinch.d); pinch.d = d; }
-      else if (drag) { const w = cv.clientWidth - 72, n = drag.v.k1 - drag.v.k0, dk = (q.x - drag.x) / w * n;
-        p.view = { k0: drag.v.k0 - dk, k1: drag.v.k1 - dk }; }
-      drawPane(p, CASES[i]);
-    });
-    const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) drag = null; };
-    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
-    cv.addEventListener("pointerleave", () => { p.mouse = null; drawPane(p, CASES[i]); });
-    cv.addEventListener("dblclick", () => { p.view = null; drawPane(p, CASES[i]); });
-    if (window.ResizeObserver) new ResizeObserver(() => { if (p.view) drawPane(p, CASES[i]); }).observe(cv);
+// ---------------------------------------------------------------- mouse and touch
+function setTf(tf) {
+  if (!TFMIN[tf] || tf === CH.tf) return;
+  const c = CASES[i], b = c.bars[CH.tf], v = CH.view;
+  const kc = v ? Math.max(0, Math.min(b.t.length - 1, Math.round((v.k0 + v.k1) / 2))) : 0, m = v ? b.t[kc] : 0;
+  CH.tf = tf; CH.ylock = null; CH.view = v ? centredView(c, m) : null;
+  try { localStorage.setItem("review-tf", tf); } catch (e) {}
+  document.querySelectorAll("#chart .tfb").forEach(x => x.classList.toggle("on", x.textContent === tf));
+  drawChart(c);
+}
+function buildChart() {
+  const el = document.getElementById("chart");
+  CH.canvas = el.querySelector("canvas"); CH.ohlcEl = el.querySelector(".ohlc");
+  const tfs = el.querySelector(".tfs");
+  for (const tf of TFS) {
+    const bt = document.createElement("button"); bt.textContent = tf; bt.className = "tfb" + (tf === CH.tf ? " on" : "");
+    bt.title = "timeframe ( [ and ] on the keyboard )"; bt.onclick = () => setTf(tf); tfs.appendChild(bt);
   }
+  el.querySelector(".reset").onclick = () => { CH.view = null; CH.ylock = null; drawChart(CASES[i]); };
+  document.getElementById("lvreset").onclick = () => { const c = CASES[i]; delete edits[c.case]; setPos(c, botPos(c)); delete edits[c.case]; drawChart(c); render(); };
+  const cv = CH.canvas, pts = new Map();
+  let pinch = null;
+  const local = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const zoom = (x, f) => {                                             // f > 1: fewer candles
+    const v = CH.view, w = cv.clientWidth - AXIS, n = v.k1 - v.k0, kc = v.k0 + Math.max(0, Math.min(1, x / w)) * n;
+    const n2 = Math.max(12, Math.min(1600, n / f));
+    CH.view = { k0: kc - (kc - v.k0) * n2 / n, k1: kc + (v.k1 - kc) * n2 / n };
+  };
+  const hit = q => {                                                   // what is under the pointer
+    const G = CH.geo; if (!G) return "pan";
+    if (q.x > G.plotW) return "yscale";
+    const inX = q.x > Math.max(G.xs, 0) - 6 && q.x < Math.min(G.xe, G.plotW) + 6;
+    if (inX) {
+      for (const [y, what] of [[G.yT, "target"], [G.yS, "stop"], [G.yE, "entry"]]) if (Math.abs(q.y - y) < 7) return what;
+      if (Math.abs(q.x - G.xe) < 8 && q.y > Math.min(G.yT, G.yS) && q.y < Math.max(G.yT, G.yS)) return "width";
+      if (q.y > Math.min(G.yT, G.yS) && q.y < Math.max(G.yT, G.yS)) return "move";
+    }
+    return "pan";
+  };
+  const CURSOR = { target: "ns-resize", stop: "ns-resize", entry: "ns-resize", width: "ew-resize", move: "move", yscale: "ns-resize", pan: "crosshair" };
+  cv.addEventListener("wheel", e => { e.preventDefault(); if (!CH.view) return; zoom(local(e).x, Math.exp(-e.deltaY * 0.0015)); drawChart(CASES[i]); }, { passive: false });
+  cv.addEventListener("pointerdown", e => {
+    cv.setPointerCapture(e.pointerId); const q = local(e); pts.set(e.pointerId, q);
+    if (pts.size === 2) { const [a, b2] = [...pts.values()]; pinch = { d: Math.abs(a.x - b2.x) || 1 }; CH.act = null; return; }
+    const c = CASES[i], G = CH.geo, what = hit(q);
+    CH.act = { what, x: q.x, y: q.y, v: { ...CH.view }, pos: { ...posOf(c) }, kS: G && G.kS, kE: G && G.kE,
+               y0: CH.ylock || (G ? { lo: G.lo, hi: G.hi } : null) };
+  });
+  cv.addEventListener("pointermove", e => {
+    const q = local(e), c = CASES[i]; CH.mouse = q;
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, q);
+    const A = CH.act, G = CH.geo;
+    if (pinch && pts.size === 2) { const [a, b2] = [...pts.values()], d = Math.abs(a.x - b2.x) || 1; zoom((a.x + b2.x) / 2, d / pinch.d); pinch.d = d; }
+    else if (A && G) {
+      const b = c.bars[CH.tf], last = b.t.length - 1, d = c.dir === "long" ? 1 : -1, tick = Math.pow(10, -META.digits);
+      const dk = Math.round((q.x - A.x) / G.slot), dp = (A.y - q.y) / G.plotH * (G.hi - G.lo);
+      const p = { ...A.pos };
+      if (A.what === "pan") {
+        const n = A.v.k1 - A.v.k0, sh = (q.x - A.x) / G.plotW * n; CH.view = { k0: A.v.k0 - sh, k1: A.v.k1 - sh };
+        if (CH.ylock && A.y0) CH.ylock = { lo: A.y0.lo + dp, hi: A.y0.hi + dp };
+      } else if (A.what === "yscale" && A.y0) {
+        const f = Math.exp((q.y - A.y) * 0.006), mid = (A.y0.lo + A.y0.hi) / 2, half = (A.y0.hi - A.y0.lo) / 2 * f;
+        CH.ylock = { lo: mid - half, hi: mid + half };
+      } else if (A.what === "entry" || A.what === "stop" || A.what === "target") {
+        let v = round(G.P(q.y));
+        if (A.what === "entry") v = d > 0 ? Math.min(Math.max(v, p.stop + tick), p.target - tick) : Math.max(Math.min(v, p.stop - tick), p.target + tick);
+        if (A.what === "stop") v = d > 0 ? Math.min(v, p.entry - tick) : Math.max(v, p.entry + tick);
+        if (A.what === "target") v = d > 0 ? Math.max(v, p.entry + tick) : Math.min(v, p.entry - tick);
+        p[A.what] = v; setPos(c, p);
+      } else if (A.what === "move") {
+        const kS = Math.max(0, Math.min(last, A.kS + dk)), dP = round(dp);
+        p.entry = round(A.pos.entry + dP); p.stop = round(A.pos.stop + dP); p.target = round(A.pos.target + dP);
+        p.start = b.t[kS]; if (A.pos.end != null) p.end = b.t[Math.max(kS, Math.min(last, A.kE + dk))];
+        setPos(c, p);
+      } else if (A.what === "width") {
+        p.end = b.t[Math.max(A.kS, Math.min(last, A.kE + dk))]; if (p.start == null) p.start = b.t[Math.min(last, A.kS)]; setPos(c, p);
+      }
+    } else cv.style.cursor = CURSOR[hit(q)];
+    drawChart(c);
+  });
+  const up = e => {
+    pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
+    if (!pts.size) { const was = CH.act && CH.act.what; CH.act = null; if (["entry", "stop", "target", "move", "width"].includes(was)) render(); }
+  };
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  cv.addEventListener("pointerleave", () => { CH.mouse = null; drawChart(CASES[i]); });
+  cv.addEventListener("dblclick", e => { if (hit(local(e)) === "yscale") CH.ylock = null; else { CH.view = null; CH.ylock = null; } drawChart(CASES[i]); });
+  if (window.ResizeObserver) new ResizeObserver(() => { if (CH.view) drawChart(CASES[i]); }).observe(cv);
 }
 function renderCharts(c) {
-  if (caseShown !== i) { PANES.forEach(p => { p.view = null; p.mouse = null; }); caseShown = i; }
-  PANES.forEach(p => drawPane(p, c));
+  if (caseShown !== i || revShown !== reveal) { CH.view = null; CH.ylock = null; CH.mouse = null; caseShown = i; revShown = reveal; }
+  drawChart(c);
 }
 
 // ---------------------------------------------------------------- one case
@@ -450,19 +617,24 @@ function render() {
     const cls = r => r > 0 ? "pos" : r < 0 ? "neg" : "";
     const traded = o => ["stop", "target", "open"].includes(o.status);
     const row = (label, o, chosen) => `<tr${chosen ? ' class="mine"' : ""}><td>${label}</td>` +
-      `<td>${o.status}${o.touch ? ` · reached ${o.touch.slice(5)}` : ""}${o.fill ? ` · filled ${o.fill.slice(5)}` : ""}</td>` +
-      `<td class="mono">${o.entry != null ? fmt(o.entry) : "–"}</td><td class="mono">${o.stop != null ? fmt(o.stop) : "–"}</td>` +
-      `<td class="mono">${o.entry != null && o.stop != null ? fmt(Math.abs(o.entry - o.stop), 2) : "–"}</td>` +
-      `<td class="${cls(o.R)}">${traded(o) ? o.R.toFixed(2) : "no trade"}</td></tr>`;
+      `<td><b>${o.status}</b><small>${o.fill ? `filled ${String(o.fill).slice(-11)}` : o.touch ? `reached ${o.touch.slice(5)}` : ""}</small></td>` +
+      `<td class="mono">${o.entry != null ? fmt(o.entry) : "–"}<small>${o.stop != null ? `stop ${fmt(o.stop)} · $${fmt(Math.abs(o.entry - o.stop), 2)}` : ""}</small></td>` +
+      `<td class="mono ${cls(o.R)}">${traded(o) ? o.R.toFixed(2) : "–"}</td></tr>`;
     const ch = a ? a.choice : "";
-    let h = `<table><tr><th></th><th>what the rules did</th><th>entry</th><th>stop</th><th>stop $</th><th>R after $${META.cost} cost</th></tr>`;
-    h += row(`<b>A</b> · its POI · ${kind} (the bot)`, { status: c.bot.outcome, fill: c.bot.fill, entry: c.entry, stop: c.stop, R: c.bot.R_after_cost }, ch === "approve");
+    let h = `<table><tr><th></th><th>what happened</th><th>entry</th><th>R*</th></tr>`;
+    h += row(`<b>A</b> · bot · ${kind}`, { status: c.bot.outcome, fill: c.bot.fill, entry: c.entry, stop: c.stop, R: c.bot.R_after_cost }, ch === "approve");
     if (c.alt) h += row(`<b>B</b> · its POI · ${other}`, c.alt, ch === "bot_other");
     c.options.forEach((o, k) => {
-      h += row(`<b>${k + 1}</b> · POI ${k + 1} ${o.tf} ${o.kind} · sniper`, o.sniper, ch === `poi${k + 1}_sniper`);
-      h += row(`<b>${k + 4}</b> · POI ${k + 1} ${o.tf} ${o.kind} · momentum`, o.momentum, ch === `poi${k + 1}_momentum`);
+      h += row(`<b>${k + 1}</b> · ${o.tf} ${o.kind} · sniper`, o.sniper, ch === `poi${k + 1}_sniper`);
+      h += row(`<b>${k + 4}</b> · ${o.tf} ${o.kind} · momentum`, o.momentum, ch === `poi${k + 1}_momentum`);
     });
-    res.innerHTML = h + `</table>`; res.classList.add("on");
+    const P = posOf(c);
+    if (moved(c, P)) {
+      const o = simulate(c, P);
+      h += row(`<b>your levels</b> (dragged)`, { status: o.outcome, fill: o.fill != null ? clockOf(c, o.fill) : null,
+               entry: P.entry, stop: P.stop, R: o.Rc }, false);
+    }
+    res.innerHTML = h + `</table><div class="foot">* R after the $${META.cost} cost</div>`; res.classList.add("on");
   } else res.classList.remove("on");
   document.getElementById("reveal").textContent = reveal ? "Hide what happened" : "Show what happened";
   document.getElementById("reveal").insertAdjacentHTML("beforeend", "<kbd>H</kbd>");
@@ -470,17 +642,33 @@ function render() {
 }
 function answer(choice) {
   const c = CASES[i];
-  answers[c.case] = { choice, reasons: [...picked], at: new Date().toISOString() };
-  save(); picked = new Set(); reveal = false;
+  const P = posOf(c);
+  answers[c.case] = { choice, reasons: [...picked], at: new Date().toISOString(), pos: moved(c, P) ? P : null };
+  delete edits[c.case];
+  save(); picked = new Set();
+  if (autoShow && Object.keys(answers).length < CASES.length) { reveal = true; render(); return; }   // Next moves on
+  reveal = false;
   if (innerWidth <= 760) scrollTo({ top: 0, behavior: "smooth" });      // phone: back up to the next chart
   if (Object.keys(answers).length === CASES.length) { render(); document.getElementById("done").classList.add("on"); return; }
   const next = CASES.findIndex((x, k) => k > i && !answers[x.case]);
   i = next >= 0 ? next : Math.min(i + 1, CASES.length - 1);
   render();
 }
-function go(d) { i = Math.max(0, Math.min(CASES.length - 1, i + d)); reveal = !!answers[CASES[i].case] && d < 0; picked = new Set(); render(); }
+function go(d) {
+  i = Math.max(0, Math.min(CASES.length - 1, i + d)); reveal = !!answers[CASES[i].case]; picked = new Set(); render();
+  if (innerWidth <= 760) scrollTo({ top: 0, behavior: "smooth" });
+}
+let autoShow = true;
+try { autoShow = localStorage.getItem("review-autoshow") !== "0"; } catch (e) {}
 
 // ---------------------------------------------------------------- export
+function myCols(c, a) {                                // the levels you dragged, and what they would have done
+  const P = a.pos; if (!P) return [0, "", "", "", "", "", "", "", "", ""];
+  const o = simulate(c, P), rr = Math.abs(P.target - P.entry) / Math.abs(P.entry - P.stop);
+  const at = m => m == null ? "" : new Date(T0(c) + m * 60000).toISOString().slice(0, 16).replace("T", " ");
+  return [1, P.entry, P.stop, P.target, rr.toFixed(2), at(P.start != null ? P.start : 0), at(o.fill), at(o.exit), o.outcome,
+          ["stop", "target"].includes(o.outcome) ? o.Rc.toFixed(2) : 0];
+}
 function exportCsv() {
   const F = ["status", "touch", "placed", "entry", "stop", "target", "R_after_cost"];
   const pickOf = (c, choice) => {                       // the replay a choice stands for
@@ -493,6 +681,7 @@ function exportCsv() {
   const head = ["case", "bot_id", "decided", "dir", "type", "order", "shot", "choice", "reasons", "answered_at",
     "choice_method", "choice_poi_tf", "choice_poi_kind", "choice_status", "choice_entry", "choice_stop", "choice_target", "choice_R_after_cost",
     "bot_entry", "bot_stop", "target", "bot_risk", "bot_outcome", "bot_R", "bot_R_after_cost", "equal_lows",
+    "my_levels_moved", "my_entry", "my_stop", "my_target", "my_RR", "my_start", "my_fill", "my_exit", "my_outcome", "my_R_after_cost",
     ...F.map(f => `alt_momentum_${f}`)];
   for (let k = 1; k <= 3; k++) {
     head.push(...["tf", "kind", "zone_top", "zone_bottom", "deeper_R"].map(f => `poi${k}_${f}`));
@@ -505,7 +694,8 @@ function exportCsv() {
     const p = pickOf(c, a.choice);
     const r = [c.case, c.bot_id, c.decided, c.dir, c.type, c.order, c.shot, a.choice, a.reasons.join(";"), a.at,
       ...(p ? [p.method, p.tf, p.kind, p.status, p.entry, p.stop, p.target, ["stop", "target", "open"].includes(p.status) ? p.R : 0] : Array(8).fill("")),
-      c.entry, c.stop, c.target, c.risk, c.bot.outcome, c.bot.R, c.bot.R_after_cost, c.eq ? c.eq.lows.length : "", ...vals(c.alt)];
+      c.entry, c.stop, c.target, c.risk, c.bot.outcome, c.bot.R, c.bot.R_after_cost, c.eq ? c.eq.lows.length : "",
+      ...myCols(c, a), ...vals(c.alt)];
     for (let k = 0; k < 3; k++) {
       const x = c.options[k];
       r.push(...(x ? [x.tf, x.kind, x.top, x.bottom, x.deeper_R] : Array(5).fill("")), ...vals(x && x.sniper), ...vals(x && x.momentum));
@@ -533,7 +723,8 @@ addEventListener("keydown", e => {
   else if (["1", "2", "3"].includes(k)) { if (CASES[i].options[+k - 1]) answer(`poi${k}_sniper`); }
   else if (["4", "5", "6"].includes(k)) { if (CASES[i].options[+k - 4]) answer(`poi${+k - 3}_momentum`); }
   else if (k === "z" || k === "arrowleft") go(-1);
-  else if (k === "arrowright") go(1);
+  else if (k === "arrowright" || k === "enter" || k === " ") { e.preventDefault(); go(1); }
+  else if (k === "[" || k === "]") setTf(TFS[Math.max(0, Math.min(TFS.length - 1, TFS.indexOf(CH.tf) + (k === "]" ? 1 : -1)))]);
   else if (k === "h") { reveal = !reveal; render(); }
   else { const r = REASONS.find(x => x[2].toLowerCase() === k); if (r) { const b = [...document.querySelectorAll("#reasons .chip")][REASONS.indexOf(r)]; b && b.click(); } }
 });
@@ -543,7 +734,10 @@ document.getElementById("theme").onclick = () => {
   renderCharts(CASES[i]);
 };
 let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => renderCharts(CASES[i]), 120); });
-buildPanes();
+const asb = document.getElementById("autoshowbox"); asb.checked = autoShow;
+asb.onchange = () => { autoShow = asb.checked; try { localStorage.setItem("review-autoshow", autoShow ? "1" : "0"); } catch (e) {} };
+unpack();
+buildChart();
 render();
 </script>
 </body>

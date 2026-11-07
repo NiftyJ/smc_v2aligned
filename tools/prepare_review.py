@@ -62,8 +62,9 @@ SAME_LEVEL_R = 0.2           # zones whose near edges are closer than this are o
 MAX_OPTIONS = 3
 TOUCH_WAIT = "2D"            # price must reach the POI within this long
 WARMUP = 300                 # candles the swing trackers see before the touch
-WINDOWS = {"H4": ("30D", "5D"), "H1": ("8D", "2D"), "M15": ("48h", "18h"),   # candles before / after the decision,
-           "M5": ("12h", "6h"), "M1": ("4h", "3h")}                         # per timeframe, for the charts
+BEFORE = {"H4": "30D", "H1": "8D", "M15": "48h", "M5": "12h", "M1": "4h"}     # candles before the decision, per chart
+AFTER = {"H4": ("15D", "45D"), "H1": ("4D", "12D"), "M15": ("1D", "5D"),       # after it: at least / at most, and in
+         "M5": ("8h", "2D"), "M1": ("3h", "16h")}                               # between, to past the last exit
 RULES = {"H4": "4h", "H1": "1h", "M15": "15min", "M5": "5min", "M1": None}
 EQUAL_ATR = 0.2              # equal lows: other M1 swing lows within this many M1 ATRs of the setup's low ...
 EQUAL_LOOKBACK = 240         # ... in the M1 candles before the decision (4 hours)
@@ -253,9 +254,20 @@ class Rules:
 
 
 def candles(df, a, b, when, digits):
+    """Packed: t = minutes from the decision, as steps; prices in ticks (10^-digits), each as a step from the close
+    before. The page unpacks them (unpack() in the template)."""
     w = df[(df.index >= a) & (df.index < b)]
-    mins = ((w.index - when) / pd.Timedelta("1min")).astype(int)
-    return dict(t=mins.tolist(), **{k: np.round(w[k].to_numpy(float), digits).tolist() for k in ("open", "high", "low", "close")})
+    mins = ((w.index - when) / pd.Timedelta("1min")).to_numpy().astype(np.int64)
+    q = {k: np.round(w[k].to_numpy(float) * 10 ** digits).astype(np.int64) for k in ("open", "high", "low", "close")}
+    prev = np.concatenate([[0], q["close"][:-1]])
+    return dict(t=np.diff(mins, prepend=0).tolist(), **{k: (q[k] - prev).tolist() for k in q})
+
+
+def last_exit(bot, alt, options, when):
+    """Minutes from the decision to the last exit among the bot's trade and every other choice."""
+    xs = [bot.get("exit")] + ([alt.get("exit")] if alt else []) + [z[k].get("exit") for z in options for k in ("sniper", "momentum")]
+    ts = [pd.Timestamp(x) for x in xs if x and x not in ("None", "NaT")]
+    return max([(t - when) / pd.Timedelta("1min") for t in ts], default=0)
 
 
 def num(x, digits):
@@ -383,8 +395,12 @@ def main():
             bot=dict(outcome=r["outcome"], R=round(float(r["R"]), 2), R_after_cost=round(float(r["R"]) - args.cost / risk, 2),
                      fill=str(r["fill_time"])[:16], exit=str(r.get("exit_time"))[:16]),
             alt=alt, options=options, eq=equal_lows(rules, i0, d, stop, digits),
-            bars={k: candles(frames[k], when - pd.Timedelta(a), when + pd.Timedelta(b), when, digits)
-                  for k, (a, b) in WINDOWS.items()}))
+            bars=None))
+        c = cases[-1]
+        end = pd.Timedelta(minutes=last_exit(c["bot"], alt, options, when) * 1.25)
+        c["bars"] = {k: candles(frames[k], when - pd.Timedelta(BEFORE[k]),
+                                when + min(max(pd.Timedelta(AFTER[k][0]), end + 20 * pd.Timedelta(RULES[k] or "1min")),
+                                           pd.Timedelta(AFTER[k][1])), when, digits) for k in BEFORE}
         if (k + 1) % 50 == 0:
             print(f"  {k + 1} cases")
 
